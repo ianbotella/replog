@@ -8,7 +8,7 @@ import {
   getCustomExercises, saveCustomExercise, deleteCustomExercise,
 } from '../store.js';
 import { PREDEFINED_EXERCISES, MUSCLE_GROUPS, GENERAL_GROUP } from '../data/exercises.js';
-import { fetchExternalExercises } from '../data/freeExerciseDb.js';
+import { fetchExternalExercises, IMG_BASE_URL } from '../data/freeExerciseDb.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
@@ -153,9 +153,10 @@ function _exerciseListHTML(all) {
 }
 
 function _exerciseItemHTML(ex) {
-  const group = ex.muscleGroup === 'general'
+  const group     = ex.muscleGroup === 'general'
     ? GENERAL_GROUP
     : MUSCLE_GROUPS.find(g => g.id === ex.muscleGroup);
+  const hasImages = ex.external && ex.images?.length > 0;
 
   let metaText = '';
   if (ex.custom) {
@@ -168,12 +169,14 @@ function _exerciseItemHTML(ex) {
   }
 
   return `
-    <div class="exercise-item" data-id="${ex.id}">
+    <div class="exercise-item${hasImages ? ' has-images' : ''}" data-id="${ex.id}"
+         ${hasImages ? 'style="cursor:pointer"' : ''}>
       <div class="exercise-item-info">
         <div class="exercise-item-name">${ex.name}</div>
         ${metaText ? `<div class="exercise-item-meta">${metaText}</div>` : ''}
       </div>
       <div class="exercise-item-actions">
+        ${hasImages ? `<i data-lucide="image" style="width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0"></i>` : ''}
         <span class="badge ${group?.badgeClass ?? 'badge-neutral'}">${ex.category}</span>
         ${ex.custom ? `
           <button class="icon-btn delete-ex-btn" data-id="${ex.id}" aria-label="Eliminar">
@@ -210,12 +213,24 @@ function _bindEvents() {
   });
 
   _container.addEventListener('click', e => {
+    // Eliminar ejercicio custom
     const btn = e.target.closest('.delete-ex-btn');
-    if (!btn) return;
-    if (!confirm('¿Eliminar este ejercicio personalizado?')) return;
-    deleteCustomExercise(btn.dataset.id);
-    showToast('Ejercicio eliminado.', 'info');
-    _reRenderList();
+    if (btn) {
+      if (!confirm('¿Eliminar este ejercicio personalizado?')) return;
+      deleteCustomExercise(btn.dataset.id);
+      showToast('Ejercicio eliminado.', 'info');
+      _reRenderList();
+      return;
+    }
+
+    // Ver imágenes de ejercicio externo
+    const item = e.target.closest('.exercise-item.has-images');
+    if (item) {
+      const custom = getCustomExercises();
+      const all    = [...PREDEFINED_EXERCISES, ...custom, ..._extExercises];
+      const ex     = all.find(ex => ex.id === item.dataset.id);
+      if (ex) _openDetailModal(ex);
+    }
   });
 
   _container.querySelector('#add-custom-btn').addEventListener('click', _openAddModal);
@@ -228,6 +243,53 @@ function _reRenderList() {
   if (!list) return;
   list.innerHTML = _exerciseListHTML(all);
   if (window.lucide) window.lucide.createIcons({ nodes: [list] });
+}
+
+// ── Modal detalle con imágenes ─────────────────────────────
+
+function _openDetailModal(ex) {
+  const group = ex.muscleGroup === 'general'
+    ? GENERAL_GROUP
+    : MUSCLE_GROUPS.find(g => g.id === ex.muscleGroup);
+
+  const imagesHTML = ex.images?.length
+    ? `<div style="display:grid;grid-template-columns:${ex.images.length > 1 ? '1fr 1fr' : '1fr'};gap:var(--space-3);margin-bottom:var(--space-4)">
+        ${ex.images.map(img => `
+          <img src="${IMG_BASE_URL}${img}"
+               alt="${ex.name}"
+               style="width:100%;border-radius:var(--radius-md);background:var(--bg-elevated);display:block"
+               onerror="this.style.display='none'">
+        `).join('')}
+      </div>`
+    : '';
+
+  const infoRows = [
+    ex.equipment ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle);font-size:var(--text-sm)">
+        <span style="color:var(--text-secondary)">Equipamiento</span>
+        <span>${ex.equipment}</span>
+      </div>` : '',
+    ex.level ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-2) 0;font-size:var(--text-sm)">
+        <span style="color:var(--text-secondary)">Nivel</span>
+        <span>${ex.level.charAt(0).toUpperCase() + ex.level.slice(1)}</span>
+      </div>` : '',
+  ].filter(Boolean).join('');
+
+  const body = openModal({
+    title: ex.name,
+    body: `
+      <div style="margin-bottom:var(--space-4)">
+        <span class="badge ${group?.badgeClass ?? 'badge-neutral'}">${ex.category}</span>
+      </div>
+      ${imagesHTML}
+      ${infoRows ? `<div>${infoRows}</div>` : ''}
+    `,
+    footer: `<button class="btn btn-primary" id="detail-close-btn" style="flex:1">Cerrar</button>`,
+  });
+
+  body.closest('.modal-container').querySelector('#detail-close-btn')
+    .addEventListener('click', closeModal);
 }
 
 // ── Modal agregar ejercicio custom ─────────────────────────
