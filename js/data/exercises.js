@@ -203,7 +203,7 @@ export function findExerciseById(id, customExercises = []) {
 export function getSessionGroupDisplay(session, customExercises = []) {
   const groupIds = [...new Set(
     session.exercises
-      .map(ex => findExerciseById(ex.exerciseId, customExercises)?.muscleGroup)
+      .map(ex => findExerciseById(ex.exerciseId, customExercises)?.muscleGroup ?? ex.muscleGroup)
       .filter(g => g && g !== 'general'),
   )];
 

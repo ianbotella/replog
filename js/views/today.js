@@ -15,6 +15,7 @@ import {
   MUSCLE_GROUPS, PREDEFINED_EXERCISES, GENERAL_GROUP,
   ROUTINE_TEMPLATES, findExerciseById, getSessionGroupDisplay,
 } from '../data/exercises.js';
+import { fetchExternalExercises } from '../data/freeExerciseDb.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
@@ -159,8 +160,8 @@ function _renderActiveSession() {
 
 function _exerciseBlockHTML(ex, idx) {
   const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
-  const type   = libEx?.type   ?? 'strength';
-  const metric = libEx?.metric ?? 'reps';
+  const type   = libEx?.type   ?? ex.type   ?? 'strength';
+  const metric = libEx?.metric ?? ex.metric ?? 'reps';
 
   const emptyMsg  = `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`;
   const setsHTML  = ex.sets.length === 0
@@ -355,9 +356,10 @@ function _cancelSession() {
 
 // ── Modal agregar ejercicio ────────────────────────────────
 
-function _openAddExerciseModal() {
-  const custom = getCustomExercises();
-  const all    = [...PREDEFINED_EXERCISES, ...custom];
+async function _openAddExerciseModal() {
+  const custom   = getCustomExercises();
+  const external = await fetchExternalExercises();
+  const all      = [...PREDEFINED_EXERCISES, ...custom, ...external];
 
   // Secciones del filtro
   const filterSections = [
@@ -453,7 +455,15 @@ function _openAddExerciseModal() {
   body.querySelector('#exercise-modal-list').addEventListener('click', e => {
     const item = e.target.closest('.selectable-exercise');
     if (!item || item.classList.contains('ex-already-added')) return;
-    _addExercise(item.dataset.id, item.dataset.name);
+
+    // Recuperar campos extra para ejercicios externos
+    const libEx = all.find(ex => ex.id === item.dataset.id);
+    const extra = {};
+    if (libEx?.muscleGroup) extra.muscleGroup = libEx.muscleGroup;
+    if (libEx?.type)        extra.type        = libEx.type;
+    if (libEx?.metric)      extra.metric      = libEx.metric;
+
+    _addExercise(item.dataset.id, item.dataset.name, extra);
     // Marcar como agregado sin cerrar el modal (permite agregar varios)
     item.classList.add('ex-already-added');
     item.querySelector('[data-lucide]').setAttribute('data-lucide', 'check');
@@ -464,9 +474,9 @@ function _openAddExerciseModal() {
 
 // ── Ejercicios en sesión ───────────────────────────────────
 
-function _addExercise(exerciseId, name) {
+function _addExercise(exerciseId, name, extra = {}) {
   if (_session.exercises.some(e => e.exerciseId === exerciseId)) return; // ya marcado en modal
-  _session.exercises.push({ exerciseId, name, sets: [] });
+  _session.exercises.push({ exerciseId, name, sets: [], ...extra });
   saveSession(_session);
   _reRenderExercisesList();
 }
@@ -480,8 +490,8 @@ function _deleteExercise(idx) {
 function _addSet(exIdx) {
   const ex     = _session.exercises[exIdx];
   const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
-  const type   = libEx?.type   ?? 'strength';
-  const metric = libEx?.metric ?? 'reps';
+  const type   = libEx?.type   ?? ex.type   ?? 'strength';
+  const metric = libEx?.metric ?? ex.metric ?? 'reps';
   const last   = ex.sets[ex.sets.length - 1];
 
   let newSet;
