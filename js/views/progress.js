@@ -4,7 +4,7 @@
  */
 
 import { getExerciseHistory, getSessions, getCustomExercises } from '../store.js';
-import { PREDEFINED_EXERCISES, MUSCLE_GROUPS } from '../data/exercises.js';
+import { MUSCLE_GROUPS } from '../data/exercises.js';
 
 let _container  = null;
 let _chart      = null;
@@ -256,19 +256,24 @@ function _bindEvents(exercises) {
 function _getExercisesWithHistory() {
   const sessions = getSessions();
   const custom   = getCustomExercises();
-  const all      = [...PREDEFINED_EXERCISES, ...custom];
 
-  // IDs de ejercicios que aparecen en alguna sesión con sets válidos
-  const seenIds = new Set();
+  // Derivar la lista directamente desde las sesiones: incluye ejercicios
+  // predefinidos, externos y custom sin depender de la biblioteca local.
+  const byId = new Map();
   sessions.forEach(s => {
     s.exercises.forEach(ex => {
-      if (ex.sets.some(set => set.weight > 0)) {
-        seenIds.add(ex.exerciseId);
+      if (ex.sets.some(set => set.weight > 0) && !byId.has(ex.exerciseId)) {
+        const customEx = custom.find(c => c.id === ex.exerciseId);
+        byId.set(ex.exerciseId, {
+          id:          ex.exerciseId,
+          name:        customEx?.name ?? ex.name,
+          muscleGroup: customEx?.muscleGroup ?? ex.muscleGroup ?? 'general',
+        });
       }
     });
   });
 
-  return all.filter(e => seenIds.has(e.id));
+  return [...byId.values()];
 }
 
 function _getDefaultExercise() {

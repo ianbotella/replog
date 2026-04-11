@@ -12,8 +12,7 @@ import {
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
 } from '../store.js';
 import {
-  MUSCLE_GROUPS, PREDEFINED_EXERCISES, GENERAL_GROUP,
-  ROUTINE_TEMPLATES, findExerciseById, getSessionGroupDisplay,
+  MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
 } from '../data/exercises.js';
 import { fetchExternalExercises } from '../data/freeExerciseDb.js';
 import { openModal, closeModal } from '../components/modal.js';
@@ -52,10 +51,9 @@ function _render() {
 // ── Pantalla de inicio ─────────────────────────────────────
 
 function _renderStartScreen() {
-  const today       = formatDateDisplay(todayISO());
-  const weekDays    = currentWeekDays();
-  const weekSessions = getThisWeekSessions();
-  const completedDates = new Set(weekSessions.map(s => s.date));
+  const today          = formatDateDisplay(todayISO());
+  const weekDays       = currentWeekDays();
+  const completedDates = new Set(getThisWeekSessions().map(s => s.date));
 
   _container.innerHTML = `
     <div class="view">
@@ -64,40 +62,14 @@ function _renderStartScreen() {
 
       ${_weekStripHTML(weekDays, completedDates)}
 
-      <!-- Sesión libre -->
       <button class="btn btn-primary btn-lg btn-full" id="start-free-btn">
         <i data-lucide="play"></i>
-        Iniciar sesión libre
+        Iniciar sesión
       </button>
-
-      <!-- Rutinas sugeridas -->
-      <div class="section-header" style="margin-top:var(--space-6)">
-        <span class="section-title">O elegí una rutina</span>
-      </div>
-      <div class="routine-template-grid">
-        ${ROUTINE_TEMPLATES.map(t => `
-          <button class="routine-template-card" data-template-id="${t.id}">
-            <div class="muscle-group-icon ${t.iconClass}">${t.emoji}</div>
-            <div class="muscle-group-info">
-              <div class="muscle-group-name">${t.name}</div>
-              <div class="muscle-group-sub">${t.exercises.length} ejercicios sugeridos</div>
-            </div>
-            <i data-lucide="chevron-right" style="color:var(--text-tertiary);width:16px;height:16px;flex-shrink:0"></i>
-          </button>
-        `).join('')}
-      </div>
     </div>
   `;
 
-  _container.querySelector('#start-free-btn')
-    .addEventListener('click', _startFreeSession);
-
-  _container.querySelectorAll('.routine-template-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const tpl = ROUTINE_TEMPLATES.find(t => t.id === card.dataset.templateId);
-      if (tpl) _startSessionFromTemplate(tpl);
-    });
-  });
+  _container.querySelector('#start-free-btn').addEventListener('click', _startFreeSession);
 }
 
 // ── Sesión activa ─────────────────────────────────────────
@@ -318,16 +290,6 @@ function _startFreeSession() {
   _render();
 }
 
-function _startSessionFromTemplate(template) {
-  _session = createSession();
-  const custom = getCustomExercises();
-  template.exercises.forEach(exId => {
-    const libEx = findExerciseById(exId, custom);
-    if (libEx) _session.exercises.push({ exerciseId: exId, name: libEx.name, sets: [] });
-  });
-  saveSession(_session);
-  _render();
-}
 
 function _finishSession() {
   if (_session.exercises.length === 0) {
@@ -359,15 +321,15 @@ function _cancelSession() {
 async function _openAddExerciseModal() {
   const custom   = getCustomExercises();
   const external = await fetchExternalExercises();
-  const all      = [...PREDEFINED_EXERCISES, ...custom, ...external];
+  const all      = [...custom, ...external];
 
   // Secciones del filtro
   const filterSections = [
     { id: 'all',            label: 'Todos' },
-    { id: 'warmup',         label: '🔥 Calentamiento' },
     { id: 'chest-triceps',  label: 'Pecho + Tríceps' },
     { id: 'back-biceps',    label: 'Espalda + Bíceps' },
     { id: 'shoulders-legs', label: 'Hombros + Piernas' },
+    { id: 'cardio',         label: '🔥 Cardio' },
     { id: 'stretch',        label: '🧘 Estiramiento' },
   ];
 
@@ -376,8 +338,8 @@ async function _openAddExerciseModal() {
 
   const getFiltered = () => {
     let list = all;
-    if      (currentFilter === 'warmup')  list = all.filter(e => e.muscleGroup === 'general' && e.category === 'Calentamiento');
-    else if (currentFilter === 'stretch') list = all.filter(e => e.muscleGroup === 'general' && e.category === 'Estiramiento');
+    if      (currentFilter === 'cardio')  list = all.filter(e => e.type === 'cardio' || e.type === 'mobility');
+    else if (currentFilter === 'stretch') list = all.filter(e => e.type === 'stretch');
     else if (currentFilter !== 'all')     list = all.filter(e => e.muscleGroup === currentFilter);
     if (currentSearch) list = list.filter(e => e.name.toLowerCase().includes(currentSearch.toLowerCase()));
     return list;
