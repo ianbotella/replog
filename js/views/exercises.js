@@ -7,7 +7,7 @@
 import {
   getCustomExercises, saveCustomExercise, deleteCustomExercise,
 } from '../store.js';
-import { PREDEFINED_EXERCISES, MUSCLE_GROUPS, GENERAL_GROUP } from '../data/exercises.js';
+import { MUSCLE_GROUPS, GENERAL_GROUP } from '../data/exercises.js';
 import { fetchExternalExercises, IMG_BASE_URL } from '../data/freeExerciseDb.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
@@ -39,7 +39,7 @@ export const ExercisesView = {
 
 function _render() {
   const custom = getCustomExercises();
-  const all    = [...PREDEFINED_EXERCISES, ...custom, ..._extExercises];
+  const all    = [...custom, ..._extExercises];
   const total  = all.length;
 
   _container.innerHTML = `
@@ -111,7 +111,7 @@ function _updateSubtitle() {
   const sub = _container?.querySelector('#ex-subtitle');
   if (!sub) return;
   const custom = getCustomExercises();
-  const total  = PREDEFINED_EXERCISES.length + custom.length + _extExercises.length;
+  const total  = custom.length + _extExercises.length;
   sub.innerHTML = _subtitleText(total);
 }
 
@@ -227,7 +227,7 @@ function _bindEvents() {
     const item = e.target.closest('.exercise-item.has-images');
     if (item) {
       const custom = getCustomExercises();
-      const all    = [...PREDEFINED_EXERCISES, ...custom, ..._extExercises];
+      const all    = [...custom, ..._extExercises];
       const ex     = all.find(ex => ex.id === item.dataset.id);
       if (ex) _openDetailModal(ex);
     }
@@ -238,7 +238,7 @@ function _bindEvents() {
 
 function _reRenderList() {
   const custom = getCustomExercises();
-  const all    = [...PREDEFINED_EXERCISES, ...custom, ..._extExercises];
+  const all    = [...custom, ..._extExercises];
   const list   = _container.querySelector('#exercises-list');
   if (!list) return;
   list.innerHTML = _exerciseListHTML(all);
