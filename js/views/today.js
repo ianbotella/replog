@@ -8,7 +8,7 @@ import {
   getTodaySession, createSession, saveSession, getCustomExercises,
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
 } from '../store.js';
-import { MUSCLE_GROUPS, PREDEFINED_EXERCISES } from '../data/exercises.js';
+import { MUSCLE_GROUPS, PREDEFINED_EXERCISES, findExerciseById } from '../data/exercises.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
@@ -141,50 +141,124 @@ function _renderActiveSession() {
 }
 
 function _exerciseBlockHTML(ex, idx) {
+  const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
+  const type   = libEx?.type   ?? 'strength';
+  const metric = libEx?.metric ?? 'reps';
+
+  const emptyMsg = `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`;
   const setsHTML = ex.sets.length === 0
-    ? `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`
-    : `
-      <div class="sets-header">
-        <span>Serie</span><span>Peso (kg)</span><span>Reps</span><span></span>
-      </div>
-      ${ex.sets.map((set, si) => `
-        <div class="set-row" data-ex="${idx}" data-set="${si}">
-          <span class="set-number">${si + 1}</span>
-          <div class="set-input-wrap">
-            <input type="number" class="set-input" data-field="weight" data-ex="${idx}" data-set="${si}"
-              value="${set.weight || ''}" placeholder="0" min="0" step="0.5">
-          </div>
-          <div class="set-input-wrap">
-            <input type="number" class="set-input" data-field="reps" data-ex="${idx}" data-set="${si}"
-              value="${set.reps || ''}" placeholder="0" min="0" step="1">
-          </div>
-          <button class="set-delete-btn" data-ex="${idx}" data-set="${si}" aria-label="Eliminar serie">
-            <i data-lucide="trash-2"></i>
-          </button>
-        </div>
-      `).join('')}
-    `;
+    ? emptyMsg
+    : _setsHeaderHTML(type, metric) + ex.sets.map((set, si) => _setRowHTML(idx, set, si, type, metric)).join('');
+
+  const addLabel = type === 'cardio' ? 'Agregar vuelta' : 'Agregar serie';
+  const typeBadge = type !== 'strength' ? `<span class="badge badge-general" style="margin-left:var(--space-2)">${_typeBadgeLabel(type, metric)}</span>` : '';
 
   return `
-    <div class="exercise-block" data-ex-idx="${idx}">
+    <div class="exercise-block" data-ex-idx="${idx}" data-ex-type="${type}">
       <div class="exercise-block-header">
-        <span class="exercise-name">${ex.name}</span>
-        <div style="display:flex;gap:var(--space-1)">
-          <button class="icon-btn delete-exercise-btn" data-ex="${idx}" aria-label="Eliminar ejercicio">
-            <i data-lucide="trash-2"></i>
-          </button>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-1)">
+          <span class="exercise-name">${ex.name}</span>
+          ${typeBadge}
         </div>
+        <button class="icon-btn delete-exercise-btn" data-ex="${idx}" aria-label="Eliminar ejercicio">
+          <i data-lucide="trash-2"></i>
+        </button>
       </div>
       <div class="sets-table" id="sets-table-${idx}">
         ${setsHTML}
       </div>
       <div class="sets-footer">
         <button class="btn btn-ghost btn-sm add-set-btn" data-ex="${idx}">
-          <i data-lucide="plus"></i> Agregar serie
+          <i data-lucide="plus"></i> ${addLabel}
         </button>
       </div>
     </div>
   `;
+}
+
+/** Encabezado de la tabla de series según tipo. */
+function _setsHeaderHTML(type, metric) {
+  if (type === 'cardio') {
+    return `<div class="sets-header sets-header-cardio">
+      <span>Vuelta</span><span>Tiempo (min)</span><span>km/h</span><span>Incl. %</span><span></span>
+    </div>`;
+  }
+  if (type === 'mobility' && metric === 'time') {
+    return `<div class="sets-header sets-header-simple">
+      <span>Serie</span><span>Tiempo (seg)</span><span></span>
+    </div>`;
+  }
+  if (type === 'mobility') {
+    return `<div class="sets-header sets-header-simple">
+      <span>Serie</span><span>Repeticiones</span><span></span>
+    </div>`;
+  }
+  if (type === 'stretch') {
+    return `<div class="sets-header sets-header-simple">
+      <span>Serie</span><span>Duración (seg)</span><span></span>
+    </div>`;
+  }
+  // Default: strength
+  return `<div class="sets-header">
+    <span>Serie</span><span>Peso (kg)</span><span>Reps</span><span></span>
+  </div>`;
+}
+
+/** Fila de una serie según tipo. */
+function _setRowHTML(exIdx, set, setIdx, type, metric) {
+  const del = `<button class="set-delete-btn" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Eliminar serie"><i data-lucide="trash-2"></i></button>`;
+  const n   = setIdx + 1;
+
+  if (type === 'cardio') {
+    return `
+      <div class="set-row set-row-cardio" data-ex="${exIdx}" data-set="${setIdx}">
+        <span class="set-number">${n}</span>
+        <input type="number" class="set-input" data-field="durationMin" data-ex="${exIdx}" data-set="${setIdx}"
+          value="${set.durationMin || ''}" placeholder="20" min="0" step="1">
+        <input type="number" class="set-input" data-field="speedKmh" data-ex="${exIdx}" data-set="${setIdx}"
+          value="${set.speedKmh || ''}" placeholder="5.0" min="0" step="0.1">
+        <input type="number" class="set-input" data-field="inclinePct" data-ex="${exIdx}" data-set="${setIdx}"
+          value="${set.inclinePct !== undefined ? set.inclinePct : ''}" placeholder="0" min="0" max="30" step="0.5">
+        ${del}
+      </div>`;
+  }
+
+  if (type === 'mobility' || type === 'stretch') {
+    const field = metric === 'time' || type === 'stretch' ? 'durationSec' : 'reps';
+    const val   = set[field] || '';
+    const ph    = field === 'durationSec' ? '30' : '10';
+    const step  = field === 'durationSec' ? '5' : '1';
+    return `
+      <div class="set-row set-row-simple" data-ex="${exIdx}" data-set="${setIdx}">
+        <span class="set-number">${n}</span>
+        <input type="number" class="set-input" data-field="${field}" data-ex="${exIdx}" data-set="${setIdx}"
+          value="${val}" placeholder="${ph}" min="0" step="${step}">
+        ${del}
+      </div>`;
+  }
+
+  // strength (default)
+  return `
+    <div class="set-row" data-ex="${exIdx}" data-set="${setIdx}">
+      <span class="set-number">${n}</span>
+      <div class="set-input-wrap">
+        <input type="number" class="set-input" data-field="weight" data-ex="${exIdx}" data-set="${setIdx}"
+          value="${set.weight || ''}" placeholder="0" min="0" step="0.5">
+      </div>
+      <div class="set-input-wrap">
+        <input type="number" class="set-input" data-field="reps" data-ex="${exIdx}" data-set="${setIdx}"
+          value="${set.reps || ''}" placeholder="0" min="0" step="1">
+      </div>
+      ${del}
+    </div>`;
+}
+
+/** Etiqueta corta para el badge del tipo de ejercicio. */
+function _typeBadgeLabel(type, metric) {
+  if (type === 'cardio')    return 'Cardio';
+  if (type === 'stretch')   return 'Estiramiento';
+  if (type === 'mobility')  return metric === 'time' ? 'Movilidad · tiempo' : 'Movilidad · reps';
+  return '';
 }
 
 // ── Event binding ──────────────────────────────────────────
@@ -296,39 +370,55 @@ function _cancelSession() {
 // ── Ejercicios ─────────────────────────────────────────────
 
 function _openAddExerciseModal() {
-  const group = MUSCLE_GROUPS.find(g => g.id === _session.muscleGroup);
-  const custom = getCustomExercises().filter(e => e.muscleGroup === _session.muscleGroup);
-  const all    = [...PREDEFINED_EXERCISES.filter(e => e.muscleGroup === _session.muscleGroup), ...custom];
+  const group  = MUSCLE_GROUPS.find(g => g.id === _session.muscleGroup);
+  const custom = getCustomExercises();
 
-  // Agrupar por categoría
-  const byCategory = {};
-  all.forEach(ex => {
-    if (!byCategory[ex.category]) byCategory[ex.category] = [];
-    byCategory[ex.category].push(ex);
-  });
+  // Calentamiento + Estiramiento siempre disponibles (muscleGroup: 'general')
+  const generalExs = [
+    ...PREDEFINED_EXERCISES.filter(e => e.muscleGroup === 'general'),
+    ...custom.filter(e => e.muscleGroup === 'general'),
+  ];
+  // Ejercicios del grupo de la sesión
+  const groupExs = [
+    ...PREDEFINED_EXERCISES.filter(e => e.muscleGroup === _session.muscleGroup),
+    ...custom.filter(e => e.muscleGroup === _session.muscleGroup),
+  ];
 
-  const categoriesHTML = Object.entries(byCategory).map(([cat, exs]) => `
-    <div class="exercise-group-header">${cat}</div>
-    ${exs.map(ex => `
-      <div class="exercise-item selectable-exercise" data-id="${ex.id}" data-name="${ex.name}" style="cursor:pointer;">
-        <div class="exercise-item-info">
-          <div class="exercise-item-name">${ex.name}</div>
-          ${ex.custom ? '<div class="exercise-item-meta">Personalizado</div>' : ''}
+  // Orden en el modal: Calentamiento → ejercicios del grupo → Estiramiento
+  const warmup  = generalExs.filter(e => e.category === 'Calentamiento');
+  const stretch = generalExs.filter(e => e.category === 'Estiramiento');
+
+  const buildSection = (exercises) => {
+    const byCategory = {};
+    exercises.forEach(ex => {
+      if (!byCategory[ex.category]) byCategory[ex.category] = [];
+      byCategory[ex.category].push(ex);
+    });
+    return Object.entries(byCategory).map(([cat, exs]) => `
+      <div class="exercise-group-header">${cat}</div>
+      ${exs.map(ex => `
+        <div class="exercise-item selectable-exercise" data-id="${ex.id}" data-name="${ex.name}" style="cursor:pointer">
+          <div class="exercise-item-info">
+            <div class="exercise-item-name">${ex.name}</div>
+            <div class="exercise-item-meta">${ex.custom ? 'Personalizado' : _typeBadgeLabel(ex.type, ex.metric)}</div>
+          </div>
+          <i data-lucide="plus" style="color:var(--accent-primary);width:16px;height:16px"></i>
         </div>
-        <i data-lucide="plus" style="color:var(--accent-primary);width:16px;height:16px"></i>
-      </div>
-    `).join('')}
-  `).join('');
+      `).join('')}
+    `).join('');
+  };
 
   const body = openModal({
-    title: `Ejercicios — ${group.name}`,
-    body:  `
+    title: `Agregar ejercicio`,
+    body: `
       <div class="search-bar" style="margin-bottom:var(--space-4)">
         <i data-lucide="search"></i>
         <input type="text" class="input-field" id="exercise-search" placeholder="Buscar ejercicio...">
       </div>
       <div id="exercise-modal-list">
-        ${categoriesHTML}
+        ${buildSection(warmup)}
+        ${buildSection(groupExs)}
+        ${buildSection(stretch)}
       </div>
     `,
   });
@@ -337,13 +427,12 @@ function _openAddExerciseModal() {
   body.querySelector('#exercise-search').addEventListener('input', e => {
     const q = e.target.value.toLowerCase();
     body.querySelectorAll('.selectable-exercise').forEach(el => {
-      const name = el.dataset.name.toLowerCase();
-      el.style.display = name.includes(q) ? '' : 'none';
+      el.style.display = el.dataset.name.toLowerCase().includes(q) ? '' : 'none';
     });
+    // Ocultar encabezados de categorías vacías
     body.querySelectorAll('.exercise-group-header').forEach(header => {
-      const next = header.nextElementSibling;
-      let visible = false;
       let sibling = header.nextElementSibling;
+      let visible = false;
       while (sibling && !sibling.classList.contains('exercise-group-header')) {
         if (sibling.style.display !== 'none') visible = true;
         sibling = sibling.nextElementSibling;
@@ -382,13 +471,31 @@ function _deleteExercise(idx) {
 }
 
 function _addSet(exIdx) {
-  // Pre-llenar con el último peso/reps registrado
-  const sets    = _session.exercises[exIdx].sets;
-  const lastSet = sets[sets.length - 1];
-  sets.push({
-    weight: lastSet?.weight ?? 0,
-    reps:   lastSet?.reps   ?? 0,
-  });
+  const ex     = _session.exercises[exIdx];
+  const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
+  const type   = libEx?.type   ?? 'strength';
+  const metric = libEx?.metric ?? 'reps';
+  const sets   = ex.sets;
+  const last   = sets[sets.length - 1];
+
+  let newSet;
+  if (type === 'cardio') {
+    newSet = {
+      durationMin: last?.durationMin ?? 20,
+      speedKmh:    last?.speedKmh    ?? 5,
+      inclinePct:  last?.inclinePct  ?? 0,
+    };
+  } else if (type === 'mobility' && metric === 'time') {
+    newSet = { durationSec: last?.durationSec ?? 30 };
+  } else if (type === 'mobility') {
+    newSet = { reps: last?.reps ?? 10 };
+  } else if (type === 'stretch') {
+    newSet = { durationSec: last?.durationSec ?? 30 };
+  } else {
+    newSet = { weight: last?.weight ?? 0, reps: last?.reps ?? 0 };
+  }
+
+  sets.push(newSet);
   saveSession(_session);
   _reRenderExercisesList();
 }

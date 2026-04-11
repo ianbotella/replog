@@ -190,6 +190,12 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Cardio: vuelta | tiempo | km/h | incl.% | × */
+.sets-header-cardio { grid-template-columns: 28px 1fr 1fr 1fr 36px; }
+
+/* Movilidad / estiramiento: serie | valor | × */
+.sets-header-simple { grid-template-columns: 28px 1fr 36px; }
+
 .set-row {
   display: grid;
   grid-template-columns: 28px 1fr 1fr 36px;
@@ -199,6 +205,9 @@
   border-bottom: 1px solid var(--border-subtle);
   transition: background var(--transition-fast);
 }
+
+.set-row-cardio { grid-template-columns: 28px 1fr 1fr 1fr 36px; }
+.set-row-simple { grid-template-columns: 28px 1fr 36px; }
 
 .set-row:last-child { border-bottom: none; }
 .set-row:hover { background: var(--bg-elevated); }

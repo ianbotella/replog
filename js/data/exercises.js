@@ -1,6 +1,12 @@
 /**
  * exercises.js — Biblioteca predefinida de ejercicios
  * Organizados por grupo muscular.
+ *
+ * Tipos de ejercicio (campo `type`):
+ *   'strength'  — peso (kg) + reps             [default]
+ *   'cardio'    — tiempo (min) + velocidad (km/h) + inclinación (%)
+ *   'mobility'  — reps (metric:'reps') o tiempo en seg (metric:'time')
+ *   'stretch'   — duración en segundos por lado
  */
 
 export const MUSCLE_GROUPS = [
@@ -32,6 +38,16 @@ export const MUSCLE_GROUPS = [
     iconClass: 'icon-shoulders',
   },
 ];
+
+/** Grupo especial para calentamiento y estiramientos (disponible en todas las sesiones). */
+export const GENERAL_GROUP = {
+  id: 'general',
+  name: 'Calentamiento / Estiramiento',
+  shortName: 'General',
+  emoji: '🏃',
+  badgeClass: 'badge-general',
+  iconClass: 'icon-general',
+};
 
 /** @type {Array<{id: string, name: string, muscleGroup: string, category: string, custom?: boolean}>} */
 export const PREDEFINED_EXERCISES = [
@@ -93,6 +109,61 @@ export const PREDEFINED_EXERCISES = [
   { id: 'calf-raise',          name: 'Elevación de Talones',     muscleGroup: 'shoulders-legs', category: 'Piernas' },
   { id: 'hip-thrust',          name: 'Hip Thrust',               muscleGroup: 'shoulders-legs', category: 'Piernas' },
   { id: 'hack-squat',          name: 'Hack Squat',               muscleGroup: 'shoulders-legs', category: 'Piernas' },
+
+  // ════════════════════════════════════════════════════════
+  // CALENTAMIENTO — disponibles en todas las sesiones
+  // ════════════════════════════════════════════════════════
+
+  // ─── Cardio (tiempo + velocidad + inclinación) ────────
+  { id: 'treadmill-walk',     name: 'Caminata en Cinta',       muscleGroup: 'general', category: 'Calentamiento', type: 'cardio' },
+  { id: 'treadmill-jog',      name: 'Trote Suave en Cinta',    muscleGroup: 'general', category: 'Calentamiento', type: 'cardio' },
+  { id: 'stationary-bike',    name: 'Bicicleta Estática',      muscleGroup: 'general', category: 'Calentamiento', type: 'cardio' },
+  { id: 'elliptical',         name: 'Elíptica',                muscleGroup: 'general', category: 'Calentamiento', type: 'cardio' },
+  { id: 'stair-climber',      name: 'Escaladora',              muscleGroup: 'general', category: 'Calentamiento', type: 'cardio' },
+
+  // ─── Movilidad — por repeticiones ────────────────────
+  { id: 'neck-circles',       name: 'Círculos de Cuello',      muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'shoulder-rotations', name: 'Rotaciones de Hombro',    muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'hip-circles',        name: 'Rotaciones de Cadera',    muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'arm-circles',        name: 'Círculos de Brazos',      muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'wrist-circles',      name: 'Círculos de Muñeca',      muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'ankle-circles',      name: 'Círculos de Tobillo',     muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'torso-rotations',    name: 'Rotaciones de Torso',     muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'leg-swings',         name: 'Balanceo de Piernas',     muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'jumping-jacks',      name: 'Saltos de Tijera',        muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'dynamic-lunge-w',    name: 'Estocadas Dinámicas',     muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'cat-cow',            name: 'Gato-Vaca',               muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'inchworm',           name: 'Inchworm',                muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'high-knees',         name: 'Rodillas Altas',          muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+  { id: 'butt-kicks',         name: 'Talones al Glúteo',       muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'reps' },
+
+  // ─── Movilidad — por tiempo (segundos) ───────────────
+  { id: 'plank-warmup',       name: 'Plancha',                 muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'time' },
+  { id: 'dead-bug',           name: 'Dead Bug',                muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'time' },
+  { id: 'glute-bridge-w',     name: 'Puente de Glúteos',       muscleGroup: 'general', category: 'Calentamiento', type: 'mobility', metric: 'time' },
+
+  // ════════════════════════════════════════════════════════
+  // ESTIRAMIENTO — disponibles en todas las sesiones
+  // ════════════════════════════════════════════════════════
+
+  { id: 'stretch-chest',      name: 'Estiramiento de Pecho',          muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-shoulder',   name: 'Estiramiento de Hombros',        muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-tricep',     name: 'Estiramiento de Tríceps',        muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-bicep',      name: 'Estiramiento de Bíceps',         muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-lat',        name: 'Estiramiento de Dorsales',       muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-lower-back', name: 'Estiramiento de Espalda Baja',   muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-neck',       name: 'Estiramiento de Cuello',         muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-quad',       name: 'Estiramiento de Cuádriceps',     muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-hamstring',  name: 'Estiramiento de Isquiotibiales', muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-calf',       name: 'Estiramiento de Pantorrillas',   muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-hip-flexor', name: 'Flexores de Cadera',             muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-glute',      name: 'Estiramiento de Glúteos',        muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'stretch-it-band',    name: 'Estiramiento Banda IT',          muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'child-pose',         name: 'Postura del Niño',               muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'cobra-pose',         name: 'Cobra',                          muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'pigeon-pose',        name: 'Postura de la Paloma',           muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'butterfly',          name: 'Mariposa',                       muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
+  { id: 'world-greatest',     name: 'World Greatest Stretch',         muscleGroup: 'general', category: 'Estiramiento', type: 'stretch' },
 ];
 
 /**
