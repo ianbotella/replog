@@ -192,3 +192,73 @@ export function getExercisesForGroup(groupId, customExercises = []) {
 export function findExerciseById(id, customExercises = []) {
   return [...PREDEFINED_EXERCISES, ...customExercises].find(e => e.id === id) ?? null;
 }
+
+/**
+ * Dado una sesión, detecta qué grupos musculares se trabajaron
+ * a partir de sus ejercicios y devuelve nombre + clase de badge para la UI.
+ * @param {object} session
+ * @param {Array}  customExercises
+ * @returns {{ name: string, badgeClass: string }}
+ */
+export function getSessionGroupDisplay(session, customExercises = []) {
+  const groupIds = [...new Set(
+    session.exercises
+      .map(ex => findExerciseById(ex.exerciseId, customExercises)?.muscleGroup)
+      .filter(g => g && g !== 'general'),
+  )];
+
+  if (groupIds.length === 0) return { name: 'Sesión libre', badgeClass: 'badge-neutral' };
+
+  if (groupIds.length === 1) {
+    const g = MUSCLE_GROUPS.find(m => m.id === groupIds[0]);
+    return g ? { name: g.name, badgeClass: g.badgeClass } : { name: groupIds[0], badgeClass: 'badge-neutral' };
+  }
+
+  const shortNames = groupIds.map(id => MUSCLE_GROUPS.find(m => m.id === id)?.shortName).filter(Boolean);
+  return {
+    name:       shortNames.length > 2 ? 'Cuerpo completo' : shortNames.join(' + '),
+    badgeClass: 'badge-neutral',
+  };
+}
+
+/**
+ * Rutinas predefinidas sugeridas.
+ * exercises[] son IDs de ejercicios de PREDEFINED_EXERCISES que se pre-cargan.
+ */
+export const ROUTINE_TEMPLATES = [
+  {
+    id:        'chest-triceps',
+    name:      'Pecho + Tríceps',
+    emoji:     '💪',
+    iconClass: 'icon-chest',
+    exercises: ['bench-press', 'incline-bench', 'cable-fly', 'pec-deck', 'tricep-pushdown', 'skull-crusher'],
+  },
+  {
+    id:        'back-biceps',
+    name:      'Espalda + Bíceps',
+    emoji:     '🦾',
+    iconClass: 'icon-back',
+    exercises: ['lat-pulldown', 'seated-row', 'barbell-row', 'dumbbell-row', 'barbell-curl', 'hammer-curl'],
+  },
+  {
+    id:        'shoulders-legs',
+    name:      'Hombros + Piernas',
+    emoji:     '🦵',
+    iconClass: 'icon-shoulders',
+    exercises: ['ohp', 'lateral-raise', 'rear-delt-fly', 'squat', 'leg-press', 'leg-curl', 'calf-raise'],
+  },
+  {
+    id:        'upper-body',
+    name:      'Tren Superior',
+    emoji:     '🏋️',
+    iconClass: 'icon-general',
+    exercises: ['bench-press', 'pull-up', 'ohp', 'barbell-curl', 'tricep-pushdown'],
+  },
+  {
+    id:        'lower-body',
+    name:      'Tren Inferior',
+    emoji:     '🦵',
+    iconClass: 'icon-shoulders',
+    exercises: ['squat', 'leg-press', 'romanian-deadlift', 'leg-curl', 'leg-extension', 'calf-raise'],
+  },
+];

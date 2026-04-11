@@ -99,12 +99,15 @@ export function saveSession(session) {
   write(KEYS.SESSIONS, sessions);
 }
 
-/** Crea una sesión nueva para hoy y la guarda. Devuelve la sesión. */
-export function createSession(muscleGroup) {
+/**
+ * Crea una sesión nueva para hoy y la guarda. Devuelve la sesión.
+ * muscleGroup es opcional: null para sesiones libres.
+ */
+export function createSession(muscleGroup = null) {
   const session = {
     id:          uid(),
     date:        todayISO(),
-    muscleGroup,
+    muscleGroup, // null en sesiones libres; se detecta dinámicamente de los ejercicios
     exercises:   [],
     durationMin: 0,
     notes:       '',

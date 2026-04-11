@@ -4,9 +4,9 @@
  */
 
 import {
-  getSessionsSorted, deleteSession, formatDateDisplay, formatDateShort,
+  getSessionsSorted, deleteSession, formatDateDisplay, getCustomExercises,
 } from '../store.js';
-import { MUSCLE_GROUPS } from '../data/exercises.js';
+import { getSessionGroupDisplay } from '../data/exercises.js';
 import { showToast } from '../components/toast.js';
 
 let _container = null;
@@ -60,7 +60,7 @@ function _sessionListHTML(sessions) {
 }
 
 function _sessionCardHTML(session) {
-  const group = MUSCLE_GROUPS.find(g => g.id === session.muscleGroup);
+  const groupInfo = getSessionGroupDisplay(session, getCustomExercises());
   const dateLabel = _capitalize(formatDateDisplay(session.date));
   const exCount   = session.exercises.length;
   const setCount  = session.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -82,7 +82,7 @@ function _sessionCardHTML(session) {
     <div class="history-card" data-session-id="${session.id}">
       <div class="history-card-header">
         <div>
-          <span class="badge ${group?.badgeClass ?? 'badge-neutral'}">${group?.name ?? session.muscleGroup}</span>
+          <span class="badge ${groupInfo.badgeClass}">${groupInfo.name}</span>
           <div class="history-date" style="margin-top:var(--space-1)">${dateLabel}</div>
         </div>
         <div style="display:flex;align-items:center;gap:var(--space-2)">
