@@ -7,7 +7,7 @@
 import {
   getCustomExercises, saveCustomExercise, deleteCustomExercise,
 } from '../store.js';
-import { PREDEFINED_EXERCISES, MUSCLE_GROUPS } from '../data/exercises.js';
+import { PREDEFINED_EXERCISES, MUSCLE_GROUPS, GENERAL_GROUP } from '../data/exercises.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
@@ -59,6 +59,9 @@ function _render() {
             ${g.shortName}
           </button>
         `).join('')}
+        <button class="chip ${_filterGroup === 'general' ? 'active' : ''}" data-group="general">
+          ${GENERAL_GROUP.shortName}
+        </button>
       </div>
 
       <!-- Lista de ejercicios -->
@@ -107,15 +110,22 @@ function _exerciseListHTML(all) {
 }
 
 function _exerciseItemHTML(ex) {
-  const group = MUSCLE_GROUPS.find(g => g.id === ex.muscleGroup);
+  const group = ex.muscleGroup === 'general'
+    ? GENERAL_GROUP
+    : MUSCLE_GROUPS.find(g => g.id === ex.muscleGroup);
+
+  const typeLabel = _typeLabel(ex.type, ex.metric);
+  const metaText  = ex.custom
+    ? `${group?.name ?? ex.muscleGroup} · <span style="color:var(--accent-primary)">Personalizado</span>`
+    : typeLabel
+      ? `${group?.name ?? ex.muscleGroup} · ${typeLabel}`
+      : group?.name ?? ex.muscleGroup;
+
   return `
     <div class="exercise-item" data-id="${ex.id}">
       <div class="exercise-item-info">
         <div class="exercise-item-name">${ex.name}</div>
-        <div class="exercise-item-meta">
-          ${group?.name ?? ex.muscleGroup}
-          ${ex.custom ? ' · <span style="color:var(--accent-primary)">Personalizado</span>' : ''}
-        </div>
+        <div class="exercise-item-meta">${metaText}</div>
       </div>
       <div class="exercise-item-actions">
         <span class="badge ${group?.badgeClass ?? 'badge-neutral'}">${ex.category}</span>
@@ -127,6 +137,14 @@ function _exerciseItemHTML(ex) {
       </div>
     </div>
   `;
+}
+
+/** Etiqueta legible del tipo de ejercicio para mostrar en la UI. */
+function _typeLabel(type, metric) {
+  if (type === 'cardio')   return 'Cardio';
+  if (type === 'stretch')  return 'Estiramiento';
+  if (type === 'mobility') return metric === 'time' ? 'Movilidad (tiempo)' : 'Movilidad (reps)';
+  return '';
 }
 
 // ── Events ─────────────────────────────────────────────────
@@ -174,23 +192,44 @@ function _reRenderList() {
 // ── Modal agregar ejercicio custom ─────────────────────────
 
 function _openAddModal() {
+  // Tipos de ejercicio disponibles para custom
+  const typeOptions = [
+    { value: 'strength', label: 'Fuerza (peso + reps)' },
+    { value: 'cardio',   label: 'Cardio (tiempo + vel. + incl.)' },
+    { value: 'mobility', label: 'Movilidad (reps)' },
+    { value: 'mobility-time', label: 'Movilidad (tiempo en seg)' },
+    { value: 'stretch',  label: 'Estiramiento (duración en seg)' },
+  ];
+
+  const allGroups = [
+    ...MUSCLE_GROUPS,
+    { id: 'general', name: GENERAL_GROUP.name },
+  ];
+
   const body = openModal({
     title: 'Nuevo ejercicio',
     body: `
       <div class="form-group">
         <label class="label" for="new-ex-name">Nombre *</label>
-        <input type="text" id="new-ex-name" class="input-field" placeholder="Ej: Press de Banca con Agarre Neutro" maxlength="60" autocomplete="off">
+        <input type="text" id="new-ex-name" class="input-field"
+          placeholder="Ej: Press Inclinado con Mancuernas" maxlength="60" autocomplete="off">
       </div>
       <div class="form-group">
         <label class="label" for="new-ex-group">Grupo muscular *</label>
         <select id="new-ex-group" class="input-field" style="cursor:pointer">
-          ${MUSCLE_GROUPS.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}
+          ${allGroups.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="label" for="new-ex-type">Tipo de registro *</label>
+        <select id="new-ex-type" class="input-field" style="cursor:pointer">
+          ${typeOptions.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
         <label class="label" for="new-ex-category">Categoría *</label>
         <input type="text" id="new-ex-category" class="input-field"
-          placeholder="Ej: Pecho, Tríceps, Cuádriceps..." maxlength="40" autocomplete="off">
+          placeholder="Ej: Pecho, Cardio, Estiramiento..." maxlength="40" autocomplete="off">
       </div>
     `,
     footer: `
@@ -201,31 +240,46 @@ function _openAddModal() {
     `,
   });
 
-  body.closest('.modal-container').querySelector('#modal-cancel-btn')
-    .addEventListener('click', closeModal);
+  const modalEl = body.closest('.modal-container');
 
-  body.closest('.modal-container').querySelector('#modal-save-btn')
-    .addEventListener('click', () => {
-      const name     = body.querySelector('#new-ex-name').value.trim();
-      const group    = body.querySelector('#new-ex-group').value;
-      const category = body.querySelector('#new-ex-category').value.trim();
+  modalEl.querySelector('#modal-cancel-btn').addEventListener('click', closeModal);
 
-      if (!name || !category) {
-        showToast('Completá nombre y categoría.', 'danger');
-        return;
-      }
+  modalEl.querySelector('#modal-save-btn').addEventListener('click', () => {
+    const name     = body.querySelector('#new-ex-name').value.trim();
+    const group    = body.querySelector('#new-ex-group').value;
+    const typeRaw  = body.querySelector('#new-ex-type').value;
+    const category = body.querySelector('#new-ex-category').value.trim();
 
-      const saved = saveCustomExercise({ name, muscleGroup: group, category });
-      closeModal();
-      showToast(`"${saved.name}" agregado a la biblioteca.`, 'success');
-      _reRenderList();
-    });
+    if (!name || !category) {
+      showToast('Completá nombre y categoría.', 'danger');
+      return;
+    }
 
-  // Auto-sugerir categoría al cambiar grupo
+    // Mapear el valor del select al tipo + metric
+    const type   = typeRaw === 'mobility-time' ? 'mobility' : typeRaw;
+    const metric = typeRaw === 'mobility-time' ? 'time' : (typeRaw === 'mobility' ? 'reps' : undefined);
+
+    const saved = saveCustomExercise({ name, muscleGroup: group, category, type, metric });
+    closeModal();
+    showToast(`"${saved.name}" agregado a la biblioteca.`, 'success');
+    _reRenderList();
+  });
+
+  // Auto-sugerir categoría y tipo al cambiar grupo
   body.querySelector('#new-ex-group').addEventListener('change', e => {
-    const g   = MUSCLE_GROUPS.find(m => m.id === e.target.value);
-    const cat = body.querySelector('#new-ex-category');
-    if (cat && !cat.value && g) cat.placeholder = `Ej: ${g.name.split('+')[0].trim()}`;
+    const gId  = e.target.value;
+    const cat  = body.querySelector('#new-ex-category');
+    const type = body.querySelector('#new-ex-type');
+    if (!cat.value) {
+      if (gId === 'general') {
+        cat.placeholder = 'Ej: Calentamiento, Estiramiento';
+      } else {
+        const g = MUSCLE_GROUPS.find(m => m.id === gId);
+        if (g) cat.placeholder = `Ej: ${g.name.split('+')[0].trim()}`;
+      }
+    }
+    // Sugerir tipo según grupo
+    if (gId === 'general' && type) type.value = 'mobility';
   });
 
   body.querySelector('#new-ex-name').focus();

@@ -53,6 +53,7 @@
   --color-chest:     #f97316;   /* orange  — Pecho + Tríceps  */
   --color-back:      #3b82f6;   /* blue    — Espalda + Bíceps */
   --color-shoulders: #a855f7;   /* purple  — Hombros + Piernas */
+  --color-general:   #14b8a6;   /* teal    — Calentamiento / Estiramiento */
 
   /* --- Z-index scale --- */
   --z-nav:    100;
