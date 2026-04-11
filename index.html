@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Replog</title>
+  <meta name="description" content="Registrá tus entrenamientos de gimnasio" />
+  <meta name="theme-color" content="#0f0f0f" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/views.css" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+  <!-- App shell -->
+  <div id="app">
+    <!-- Header -->
+    <header id="app-header">
+      <div class="header-inner">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="10" width="4" height="8" rx="2" fill="currentColor"/>
+            <rect x="23" y="10" width="4" height="8" rx="2" fill="currentColor"/>
+            <rect x="5" y="7" width="4" height="14" rx="2" fill="currentColor"/>
+            <rect x="19" y="7" width="4" height="14" rx="2" fill="currentColor"/>
+            <rect x="9" y="12" width="10" height="4" rx="2" fill="currentColor"/>
+          </svg>
+          <span class="brand-name">Replog</span>
+        </div>
+        <button id="theme-toggle" class="icon-btn" aria-label="Cambiar tema" title="Cambiar tema">
+          <i data-lucide="sun" class="icon-light"></i>
+          <i data-lucide="moon" class="icon-dark"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main content area -->
+    <main id="view-container">
+      <!-- Views are rendered here by router -->
+    </main>
+
+    <!-- Bottom navigation -->
+    <nav id="bottom-nav">
+      <a href="#/today" class="nav-item" data-view="today">
+        <i data-lucide="dumbbell"></i>
+        <span>Hoy</span>
+      </a>
+      <a href="#/history" class="nav-item" data-view="history">
+        <i data-lucide="calendar-days"></i>
+        <span>Historial</span>
+      </a>
+      <a href="#/progress" class="nav-item" data-view="progress">
+        <i data-lucide="trending-up"></i>
+        <span>Progreso</span>
+      </a>
+      <a href="#/exercises" class="nav-item" data-view="exercises">
+        <i data-lucide="list"></i>
+        <span>Ejercicios</span>
+      </a>
+    </nav>
+  </div>
+
+  <!-- Modal container -->
+  <div id="modal-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div id="modal-container" class="modal-container"></div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- JS Modules -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
