@@ -7,8 +7,11 @@
  */
 
 const EXT_DB_URL = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
-const CACHE_KEY  = 'replog_ext_exercises';
+const CACHE_KEY  = 'replog_ext_exercises_v2'; // v2: incluye campo images
 const CACHE_TTL  = 24 * 60 * 60 * 1000; // 24 h en ms
+
+/** URL base para construir las URLs de imagen de cada ejercicio. */
+export const IMG_BASE_URL = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
 
 // ── Tablas de mapeo ────────────────────────────────────────
 
@@ -84,6 +87,7 @@ function _map(raw) {
   if (type !== 'strength')                              ex.type      = type;
   if (raw.equipment && raw.equipment !== 'body only')   ex.equipment = raw.equipment;
   if (raw.level)                                        ex.level     = raw.level;
+  if (raw.images?.length)                               ex.images    = raw.images;
   return ex;
 }
 
