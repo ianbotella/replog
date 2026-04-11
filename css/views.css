@@ -77,6 +77,34 @@
   box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
+/* ── Routine template cards (pantalla inicio) ────────────── */
+.routine-template-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+/* Reusa los estilos de .muscle-group-card — mismo layout */
+.routine-template-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  width: 100%;
+}
+.routine-template-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-elevated);
+}
+.routine-template-card:active { transform: scale(.98); }
+
 /* Muscle group picker */
 .muscle-group-grid {
   display: grid;
@@ -125,6 +153,7 @@
 .icon-chest     { background: rgba(249,115,22,.12); }
 .icon-back      { background: rgba(59,130,246,.12); }
 .icon-shoulders { background: rgba(168,85,247,.12); }
+.icon-general   { background: rgba(20,184,166,.12); }
 
 .muscle-group-info { flex: 1; }
 .muscle-group-name { font-weight: var(--weight-semibold); font-size: var(--text-base); }
@@ -469,6 +498,16 @@
   resize: none;
   min-height: 72px;
   font-size: var(--text-sm);
+}
+
+/* Ejercicio ya agregado en el modal */
+.ex-already-added {
+  opacity: .55;
+  cursor: default !important;
+}
+.ex-already-added .exercise-item-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--accent-primary);
 }
 
 /* Inline add exercise row (in active session) */

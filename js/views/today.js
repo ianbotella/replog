@@ -1,20 +1,26 @@
 /**
  * today.js — Vista "Hoy"
- * Permite iniciar una sesión, seleccionar grupo muscular,
- * agregar ejercicios y registrar sets.
+ *
+ * Flujo:
+ *   1. Pantalla de inicio: botón "Sesión libre" + rutinas sugeridas.
+ *   2. Sesión activa: agregar ejercicios de cualquier grupo + registrar sets.
+ *      El badge del encabezado se detecta automáticamente de los ejercicios agregados.
  */
 
 import {
   getTodaySession, createSession, saveSession, getCustomExercises,
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
 } from '../store.js';
-import { MUSCLE_GROUPS, PREDEFINED_EXERCISES, findExerciseById } from '../data/exercises.js';
+import {
+  MUSCLE_GROUPS, PREDEFINED_EXERCISES, GENERAL_GROUP,
+  ROUTINE_TEMPLATES, findExerciseById, getSessionGroupDisplay,
+} from '../data/exercises.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
 // Estado local de la vista
-let _session   = null;  // sesión activa del día
-let _container = null;
+let _session       = null;
+let _container     = null;
 let _timerInterval = null;
 
 // ── Entry point ────────────────────────────────────────────
@@ -42,11 +48,11 @@ function _render() {
   if (window.lucide) window.lucide.createIcons({ nodes: [_container] });
 }
 
-// ── Pantalla inicial (sin sesión) ─────────────────────────
+// ── Pantalla de inicio ─────────────────────────────────────
 
 function _renderStartScreen() {
-  const today = formatDateDisplay(todayISO());
-  const weekDays = currentWeekDays();
+  const today       = formatDateDisplay(todayISO());
+  const weekDays    = currentWeekDays();
   const weekSessions = getThisWeekSessions();
   const completedDates = new Set(weekSessions.map(s => s.date));
 
@@ -55,54 +61,62 @@ function _renderStartScreen() {
       <h1 class="page-title">Hoy</h1>
       <p class="page-subtitle">${_capitalize(today)}</p>
 
-      <!-- Resumen semanal -->
       ${_weekStripHTML(weekDays, completedDates)}
 
-      <!-- Selector de grupo muscular -->
-      <div class="section-header">
-        <span class="section-title">Empezar entrenamiento</span>
+      <!-- Sesión libre -->
+      <button class="btn btn-primary btn-lg btn-full" id="start-free-btn">
+        <i data-lucide="play"></i>
+        Iniciar sesión libre
+      </button>
+
+      <!-- Rutinas sugeridas -->
+      <div class="section-header" style="margin-top:var(--space-6)">
+        <span class="section-title">O elegí una rutina</span>
       </div>
-      <div class="muscle-group-grid">
-        ${MUSCLE_GROUPS.map(g => `
-          <button class="muscle-group-card" data-group="${g.id}">
-            <div class="muscle-group-icon ${g.iconClass}">${g.emoji}</div>
+      <div class="routine-template-grid">
+        ${ROUTINE_TEMPLATES.map(t => `
+          <button class="routine-template-card" data-template-id="${t.id}">
+            <div class="muscle-group-icon ${t.iconClass}">${t.emoji}</div>
             <div class="muscle-group-info">
-              <div class="muscle-group-name">${g.name}</div>
-              <div class="muscle-group-sub">${_getGroupExerciseCount(g.id)} ejercicios disponibles</div>
+              <div class="muscle-group-name">${t.name}</div>
+              <div class="muscle-group-sub">${t.exercises.length} ejercicios sugeridos</div>
             </div>
-            <i data-lucide="chevron-right" style="color:var(--text-tertiary);width:16px;height:16px"></i>
+            <i data-lucide="chevron-right" style="color:var(--text-tertiary);width:16px;height:16px;flex-shrink:0"></i>
           </button>
         `).join('')}
       </div>
     </div>
   `;
 
-  // Eventos
-  _container.querySelectorAll('.muscle-group-card').forEach(card => {
-    card.addEventListener('click', () => _startSession(card.dataset.group));
+  _container.querySelector('#start-free-btn')
+    .addEventListener('click', _startFreeSession);
+
+  _container.querySelectorAll('.routine-template-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const tpl = ROUTINE_TEMPLATES.find(t => t.id === card.dataset.templateId);
+      if (tpl) _startSessionFromTemplate(tpl);
+    });
   });
 }
 
 // ── Sesión activa ─────────────────────────────────────────
 
 function _renderActiveSession() {
-  const group = MUSCLE_GROUPS.find(g => g.id === _session.muscleGroup);
-  const weekDays = currentWeekDays();
-  const weekSessions = getThisWeekSessions();
-  const completedDates = new Set(weekSessions.map(s => s.date));
+  const custom    = getCustomExercises();
+  const groupInfo = getSessionGroupDisplay(_session, custom);
+  const weekDays  = currentWeekDays();
+  const completedDates = new Set(getThisWeekSessions().map(s => s.date));
 
   _container.innerHTML = `
     <div class="view">
-      <!-- Resumen semanal -->
       ${_weekStripHTML(weekDays, completedDates)}
 
-      <!-- Header sesión activa -->
       <div class="active-session-header">
         <div>
-          <span class="badge ${group.badgeClass}">${group.name}</span>
+          <span id="session-group-badge" class="badge ${groupInfo.badgeClass}">${groupInfo.name}</span>
           <h2 class="page-title" style="margin-top:var(--space-2)">Sesión activa</h2>
         </div>
-        <div class="session-timer" id="session-timer">
+        <div class="session-timer">
           <i data-lucide="timer"></i>
           <span id="timer-display">00:00</span>
         </div>
@@ -114,7 +128,7 @@ function _renderActiveSession() {
       </div>
 
       <!-- Botón agregar ejercicio -->
-      <button class="exercise-block" id="add-exercise-btn" style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-5);cursor:pointer;border-style:dashed;justify-content:center;color:var(--accent-primary);font-weight:var(--weight-semibold);font-size:var(--text-sm);background:var(--accent-subtle);">
+      <button id="add-exercise-btn" class="exercise-block" style="display:flex;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-4) var(--space-5);cursor:pointer;border-style:dashed;color:var(--accent-primary);font-weight:var(--weight-semibold);font-size:var(--text-sm);background:var(--accent-subtle);">
         <i data-lucide="plus-circle"></i>
         Agregar ejercicio
       </button>
@@ -122,10 +136,11 @@ function _renderActiveSession() {
       <!-- Notas -->
       <div style="margin-top:var(--space-4)">
         <label class="label" for="session-notes">Notas</label>
-        <textarea id="session-notes" class="input-field notes-area" placeholder="Cómo fue el entreno...">${_session.notes || ''}</textarea>
+        <textarea id="session-notes" class="input-field notes-area"
+          placeholder="Cómo fue el entreno...">${_session.notes || ''}</textarea>
       </div>
 
-      <!-- Finalizar -->
+      <!-- Acciones -->
       <div style="margin-top:var(--space-5);display:flex;gap:var(--space-3)">
         <button class="btn btn-secondary" id="cancel-session-btn" style="flex:1">Cancelar</button>
         <button class="btn btn-primary btn-lg" id="finish-session-btn" style="flex:2">
@@ -140,18 +155,22 @@ function _renderActiveSession() {
   _startTimer();
 }
 
+// ── Exercise block HTML ────────────────────────────────────
+
 function _exerciseBlockHTML(ex, idx) {
   const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
   const type   = libEx?.type   ?? 'strength';
   const metric = libEx?.metric ?? 'reps';
 
-  const emptyMsg = `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`;
-  const setsHTML = ex.sets.length === 0
+  const emptyMsg  = `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`;
+  const setsHTML  = ex.sets.length === 0
     ? emptyMsg
     : _setsHeaderHTML(type, metric) + ex.sets.map((set, si) => _setRowHTML(idx, set, si, type, metric)).join('');
 
-  const addLabel = type === 'cardio' ? 'Agregar vuelta' : 'Agregar serie';
-  const typeBadge = type !== 'strength' ? `<span class="badge badge-general" style="margin-left:var(--space-2)">${_typeBadgeLabel(type, metric)}</span>` : '';
+  const addLabel  = type === 'cardio' ? 'Agregar vuelta' : 'Agregar serie';
+  const typeBadge = type !== 'strength'
+    ? `<span class="badge badge-general" style="margin-left:var(--space-2)">${_typeBadgeLabel(type, metric)}</span>`
+    : '';
 
   return `
     <div class="exercise-block" data-ex-idx="${idx}" data-ex-type="${type}">
@@ -176,7 +195,6 @@ function _exerciseBlockHTML(ex, idx) {
   `;
 }
 
-/** Encabezado de la tabla de series según tipo. */
 function _setsHeaderHTML(type, metric) {
   if (type === 'cardio') {
     return `<div class="sets-header sets-header-cardio">
@@ -198,13 +216,11 @@ function _setsHeaderHTML(type, metric) {
       <span>Serie</span><span>Duración (seg)</span><span></span>
     </div>`;
   }
-  // Default: strength
   return `<div class="sets-header">
     <span>Serie</span><span>Peso (kg)</span><span>Reps</span><span></span>
   </div>`;
 }
 
-/** Fila de una serie según tipo. */
 function _setRowHTML(exIdx, set, setIdx, type, metric) {
   const del = `<button class="set-delete-btn" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Eliminar serie"><i data-lucide="trash-2"></i></button>`;
   const n   = setIdx + 1;
@@ -224,20 +240,17 @@ function _setRowHTML(exIdx, set, setIdx, type, metric) {
   }
 
   if (type === 'mobility' || type === 'stretch') {
-    const field = metric === 'time' || type === 'stretch' ? 'durationSec' : 'reps';
-    const val   = set[field] || '';
+    const field = (metric === 'time' || type === 'stretch') ? 'durationSec' : 'reps';
     const ph    = field === 'durationSec' ? '30' : '10';
-    const step  = field === 'durationSec' ? '5' : '1';
     return `
       <div class="set-row set-row-simple" data-ex="${exIdx}" data-set="${setIdx}">
         <span class="set-number">${n}</span>
         <input type="number" class="set-input" data-field="${field}" data-ex="${exIdx}" data-set="${setIdx}"
-          value="${val}" placeholder="${ph}" min="0" step="${step}">
+          value="${set[field] || ''}" placeholder="${ph}" min="0" step="${field === 'durationSec' ? '5' : '1'}">
         ${del}
       </div>`;
   }
 
-  // strength (default)
   return `
     <div class="set-row" data-ex="${exIdx}" data-set="${setIdx}">
       <span class="set-number">${n}</span>
@@ -253,64 +266,39 @@ function _setRowHTML(exIdx, set, setIdx, type, metric) {
     </div>`;
 }
 
-/** Etiqueta corta para el badge del tipo de ejercicio. */
 function _typeBadgeLabel(type, metric) {
-  if (type === 'cardio')    return 'Cardio';
-  if (type === 'stretch')   return 'Estiramiento';
-  if (type === 'mobility')  return metric === 'time' ? 'Movilidad · tiempo' : 'Movilidad · reps';
+  if (type === 'cardio')   return 'Cardio';
+  if (type === 'stretch')  return 'Estiramiento';
+  if (type === 'mobility') return metric === 'time' ? 'Movilidad · tiempo' : 'Movilidad · reps';
   return '';
 }
 
 // ── Event binding ──────────────────────────────────────────
 
 function _bindActiveSessionEvents() {
-  // Agregar ejercicio
-  _container.querySelector('#add-exercise-btn')
-    .addEventListener('click', _openAddExerciseModal);
-
-  // Finalizar sesión
-  _container.querySelector('#finish-session-btn')
-    .addEventListener('click', _finishSession);
-
-  // Cancelar sesión
-  _container.querySelector('#cancel-session-btn')
-    .addEventListener('click', _cancelSession);
-
-  // Notas
+  _container.querySelector('#add-exercise-btn').addEventListener('click', _openAddExerciseModal);
+  _container.querySelector('#finish-session-btn').addEventListener('click', _finishSession);
+  _container.querySelector('#cancel-session-btn').addEventListener('click', _cancelSession);
   _container.querySelector('#session-notes')
     .addEventListener('input', e => { _session.notes = e.target.value; });
 
-  // Delegación de eventos en la lista de ejercicios
-  _container.addEventListener('click', _handleExerciseListClick);
+  _container.addEventListener('click',  _handleExerciseListClick);
   _container.addEventListener('change', _handleSetInputChange);
   _container.addEventListener('input',  _handleSetInputChange);
 }
 
 function _handleExerciseListClick(e) {
-  // Agregar serie
   const addSetBtn = e.target.closest('.add-set-btn');
-  if (addSetBtn) {
-    const exIdx = parseInt(addSetBtn.dataset.ex, 10);
-    _addSet(exIdx);
-    return;
-  }
+  if (addSetBtn) { _addSet(parseInt(addSetBtn.dataset.ex, 10)); return; }
 
-  // Eliminar serie
   const delSetBtn = e.target.closest('.set-delete-btn');
   if (delSetBtn) {
-    const exIdx = parseInt(delSetBtn.dataset.ex, 10);
-    const setIdx = parseInt(delSetBtn.dataset.set, 10);
-    _deleteSet(exIdx, setIdx);
+    _deleteSet(parseInt(delSetBtn.dataset.ex, 10), parseInt(delSetBtn.dataset.set, 10));
     return;
   }
 
-  // Eliminar ejercicio
   const delExBtn = e.target.closest('.delete-exercise-btn');
-  if (delExBtn) {
-    const exIdx = parseInt(delExBtn.dataset.ex, 10);
-    _deleteExercise(exIdx);
-    return;
-  }
+  if (delExBtn) { _deleteExercise(parseInt(delExBtn.dataset.ex, 10)); return; }
 }
 
 function _handleSetInputChange(e) {
@@ -318,17 +306,25 @@ function _handleSetInputChange(e) {
   if (!input) return;
   const exIdx  = parseInt(input.dataset.ex, 10);
   const setIdx = parseInt(input.dataset.set, 10);
-  const field  = input.dataset.field;
-  const val    = parseFloat(input.value) || 0;
-
-  _session.exercises[exIdx].sets[setIdx][field] = val;
+  _session.exercises[exIdx].sets[setIdx][input.dataset.field] = parseFloat(input.value) || 0;
   saveSession(_session);
 }
 
 // ── Acciones de sesión ─────────────────────────────────────
 
-function _startSession(muscleGroupId) {
-  _session = createSession(muscleGroupId);
+function _startFreeSession() {
+  _session = createSession();
+  _render();
+}
+
+function _startSessionFromTemplate(template) {
+  _session = createSession();
+  const custom = getCustomExercises();
+  template.exercises.forEach(exId => {
+    const libEx = findExerciseById(exId, custom);
+    if (libEx) _session.exercises.push({ exerciseId: exId, name: libEx.name, sets: [] });
+  });
+  saveSession(_session);
   _render();
 }
 
@@ -337,58 +333,58 @@ function _finishSession() {
     showToast('Agregá al menos un ejercicio antes de finalizar.', 'danger');
     return;
   }
-
-  // Calcular duración
   const started = new Date(_session.startedAt);
   _session.durationMin = Math.round((Date.now() - started.getTime()) / 60000);
-
-  // Guardar notas finales
   const notesEl = _container.querySelector('#session-notes');
   if (notesEl) _session.notes = notesEl.value;
-
   saveSession(_session);
   showToast('Sesión guardada correctamente.', 'success');
-
   if (_timerInterval) clearInterval(_timerInterval);
-
-  // Navegar a historial
   setTimeout(() => { window.location.hash = '#/history'; }, 400);
 }
 
 function _cancelSession() {
   if (!confirm('¿Cancelar la sesión de hoy? Se perderán los datos.')) return;
-  const { deleteSession } = window._replogStore ?? {};
-  // Importar dinamicamente para evitar ciclos
-  import('../store.js').then(({ deleteSession: del }) => {
-    del(_session.id);
+  import('../store.js').then(({ deleteSession }) => {
+    deleteSession(_session.id);
     _session = null;
     if (_timerInterval) clearInterval(_timerInterval);
     _render();
   });
 }
 
-// ── Ejercicios ─────────────────────────────────────────────
+// ── Modal agregar ejercicio ────────────────────────────────
 
 function _openAddExerciseModal() {
-  const group  = MUSCLE_GROUPS.find(g => g.id === _session.muscleGroup);
   const custom = getCustomExercises();
+  const all    = [...PREDEFINED_EXERCISES, ...custom];
 
-  // Calentamiento + Estiramiento siempre disponibles (muscleGroup: 'general')
-  const generalExs = [
-    ...PREDEFINED_EXERCISES.filter(e => e.muscleGroup === 'general'),
-    ...custom.filter(e => e.muscleGroup === 'general'),
+  // Secciones del filtro
+  const filterSections = [
+    { id: 'all',            label: 'Todos' },
+    { id: 'warmup',         label: '🔥 Calentamiento' },
+    { id: 'chest-triceps',  label: 'Pecho + Tríceps' },
+    { id: 'back-biceps',    label: 'Espalda + Bíceps' },
+    { id: 'shoulders-legs', label: 'Hombros + Piernas' },
+    { id: 'stretch',        label: '🧘 Estiramiento' },
   ];
-  // Ejercicios del grupo de la sesión
-  const groupExs = [
-    ...PREDEFINED_EXERCISES.filter(e => e.muscleGroup === _session.muscleGroup),
-    ...custom.filter(e => e.muscleGroup === _session.muscleGroup),
-  ];
 
-  // Orden en el modal: Calentamiento → ejercicios del grupo → Estiramiento
-  const warmup  = generalExs.filter(e => e.category === 'Calentamiento');
-  const stretch = generalExs.filter(e => e.category === 'Estiramiento');
+  let currentFilter = 'all';
+  let currentSearch = '';
 
-  const buildSection = (exercises) => {
+  const getFiltered = () => {
+    let list = all;
+    if      (currentFilter === 'warmup')  list = all.filter(e => e.muscleGroup === 'general' && e.category === 'Calentamiento');
+    else if (currentFilter === 'stretch') list = all.filter(e => e.muscleGroup === 'general' && e.category === 'Estiramiento');
+    else if (currentFilter !== 'all')     list = all.filter(e => e.muscleGroup === currentFilter);
+    if (currentSearch) list = list.filter(e => e.name.toLowerCase().includes(currentSearch.toLowerCase()));
+    return list;
+  };
+
+  const buildListHTML = (exercises) => {
+    if (!exercises.length) {
+      return `<div style="text-align:center;padding:var(--space-8) 0;color:var(--text-tertiary);font-size:var(--text-sm)">Sin resultados</div>`;
+    }
     const byCategory = {};
     exercises.forEach(ex => {
       if (!byCategory[ex.category]) byCategory[ex.category] = [];
@@ -396,72 +392,83 @@ function _openAddExerciseModal() {
     });
     return Object.entries(byCategory).map(([cat, exs]) => `
       <div class="exercise-group-header">${cat}</div>
-      ${exs.map(ex => `
-        <div class="exercise-item selectable-exercise" data-id="${ex.id}" data-name="${ex.name}" style="cursor:pointer">
-          <div class="exercise-item-info">
-            <div class="exercise-item-name">${ex.name}</div>
-            <div class="exercise-item-meta">${ex.custom ? 'Personalizado' : _typeBadgeLabel(ex.type, ex.metric)}</div>
-          </div>
-          <i data-lucide="plus" style="color:var(--accent-primary);width:16px;height:16px"></i>
-        </div>
-      `).join('')}
+      ${exs.map(ex => {
+        const alreadyAdded = _session.exercises.some(se => se.exerciseId === ex.id);
+        return `
+          <div class="exercise-item selectable-exercise${alreadyAdded ? ' ex-already-added' : ''}"
+               data-id="${ex.id}" data-name="${ex.name}" style="cursor:pointer">
+            <div class="exercise-item-info">
+              <div class="exercise-item-name">${ex.name}</div>
+              <div class="exercise-item-meta">${ex.custom ? 'Personalizado' : (_typeBadgeLabel(ex.type, ex.metric) || _groupName(ex.muscleGroup))}</div>
+            </div>
+            ${alreadyAdded
+              ? `<i data-lucide="check" style="color:var(--accent-primary);width:16px;height:16px"></i>`
+              : `<i data-lucide="plus" style="color:var(--accent-primary);width:16px;height:16px"></i>`}
+          </div>`;
+      }).join('')}
     `).join('');
   };
 
+  const refreshList = (bodyEl) => {
+    const list = bodyEl.querySelector('#exercise-modal-list');
+    list.innerHTML = buildListHTML(getFiltered());
+    if (window.lucide) window.lucide.createIcons({ nodes: [list] });
+  };
+
   const body = openModal({
-    title: `Agregar ejercicio`,
+    title: 'Agregar ejercicio',
     body: `
-      <div class="search-bar" style="margin-bottom:var(--space-4)">
+      <div class="search-bar" style="margin-bottom:var(--space-3)">
         <i data-lucide="search"></i>
-        <input type="text" class="input-field" id="exercise-search" placeholder="Buscar ejercicio...">
+        <input type="text" class="input-field" id="exercise-search" placeholder="Buscar ejercicio..." autocomplete="off">
+      </div>
+      <div class="chip-group" id="modal-filter-chips" style="margin-bottom:var(--space-4);flex-wrap:nowrap;overflow-x:auto;padding-bottom:var(--space-1)">
+        ${filterSections.map(f => `
+          <button class="chip${f.id === 'all' ? ' active' : ''}" data-filter="${f.id}" style="flex-shrink:0">${f.label}</button>
+        `).join('')}
       </div>
       <div id="exercise-modal-list">
-        ${buildSection(warmup)}
-        ${buildSection(groupExs)}
-        ${buildSection(stretch)}
+        ${buildListHTML(getFiltered())}
       </div>
     `,
   });
 
-  // Búsqueda en tiempo real
-  body.querySelector('#exercise-search').addEventListener('input', e => {
-    const q = e.target.value.toLowerCase();
-    body.querySelectorAll('.selectable-exercise').forEach(el => {
-      el.style.display = el.dataset.name.toLowerCase().includes(q) ? '' : 'none';
-    });
-    // Ocultar encabezados de categorías vacías
-    body.querySelectorAll('.exercise-group-header').forEach(header => {
-      let sibling = header.nextElementSibling;
-      let visible = false;
-      while (sibling && !sibling.classList.contains('exercise-group-header')) {
-        if (sibling.style.display !== 'none') visible = true;
-        sibling = sibling.nextElementSibling;
-      }
-      header.style.display = visible ? '' : 'none';
-    });
+  // Chips de filtro
+  body.querySelector('#modal-filter-chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    currentFilter = chip.dataset.filter;
+    body.querySelectorAll('#modal-filter-chips .chip').forEach(c =>
+      c.classList.toggle('active', c.dataset.filter === currentFilter));
+    refreshList(body);
   });
 
-  // Click para agregar ejercicio
+  // Búsqueda
+  body.querySelector('#exercise-search').addEventListener('input', e => {
+    currentSearch = e.target.value;
+    refreshList(body);
+  });
+
+  // Click para agregar
   body.querySelector('#exercise-modal-list').addEventListener('click', e => {
     const item = e.target.closest('.selectable-exercise');
-    if (!item) return;
+    if (!item || item.classList.contains('ex-already-added')) return;
     _addExercise(item.dataset.id, item.dataset.name);
-    closeModal();
+    // Marcar como agregado sin cerrar el modal (permite agregar varios)
+    item.classList.add('ex-already-added');
+    item.querySelector('[data-lucide]').setAttribute('data-lucide', 'check');
+    if (window.lucide) window.lucide.createIcons({ nodes: [item] });
+    showToast(`${item.dataset.name} agregado.`, 'success');
   });
 }
 
+// ── Ejercicios en sesión ───────────────────────────────────
+
 function _addExercise(exerciseId, name) {
-  // Evitar duplicados
-  if (_session.exercises.some(e => e.exerciseId === exerciseId)) {
-    showToast('Este ejercicio ya está en la sesión.', 'danger');
-    return;
-  }
+  if (_session.exercises.some(e => e.exerciseId === exerciseId)) return; // ya marcado en modal
   _session.exercises.push({ exerciseId, name, sets: [] });
   saveSession(_session);
-
-  // Re-renderizar solo la lista de ejercicios
   _reRenderExercisesList();
-  showToast(`${name} agregado.`, 'success');
 }
 
 function _deleteExercise(idx) {
@@ -475,16 +482,11 @@ function _addSet(exIdx) {
   const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
   const type   = libEx?.type   ?? 'strength';
   const metric = libEx?.metric ?? 'reps';
-  const sets   = ex.sets;
-  const last   = sets[sets.length - 1];
+  const last   = ex.sets[ex.sets.length - 1];
 
   let newSet;
   if (type === 'cardio') {
-    newSet = {
-      durationMin: last?.durationMin ?? 20,
-      speedKmh:    last?.speedKmh    ?? 5,
-      inclinePct:  last?.inclinePct  ?? 0,
-    };
+    newSet = { durationMin: last?.durationMin ?? 20, speedKmh: last?.speedKmh ?? 5, inclinePct: last?.inclinePct ?? 0 };
   } else if (type === 'mobility' && metric === 'time') {
     newSet = { durationSec: last?.durationSec ?? 30 };
   } else if (type === 'mobility') {
@@ -495,7 +497,7 @@ function _addSet(exIdx) {
     newSet = { weight: last?.weight ?? 0, reps: last?.reps ?? 0 };
   }
 
-  sets.push(newSet);
+  ex.sets.push(newSet);
   saveSession(_session);
   _reRenderExercisesList();
 }
@@ -511,28 +513,34 @@ function _reRenderExercisesList() {
   if (!list) return;
   list.innerHTML = _session.exercises.map((ex, i) => _exerciseBlockHTML(ex, i)).join('');
   if (window.lucide) window.lucide.createIcons({ nodes: [list] });
+  _updateSessionBadge();
+}
+
+/** Actualiza el badge del encabezado en base a los ejercicios actuales. */
+function _updateSessionBadge() {
+  const badge = document.getElementById('session-group-badge');
+  if (!badge) return;
+  const { name, badgeClass } = getSessionGroupDisplay(_session, getCustomExercises());
+  badge.textContent = name;
+  badge.className   = `badge ${badgeClass}`;
 }
 
 // ── Timer ──────────────────────────────────────────────────
 
 function _startTimer() {
   if (_timerInterval) clearInterval(_timerInterval);
-
   const started = new Date(_session.startedAt);
-  const display = () => {
+  const tick = () => {
     const el = document.getElementById('timer-display');
     if (!el) { clearInterval(_timerInterval); return; }
-    const elapsed = Math.floor((Date.now() - started.getTime()) / 1000);
-    const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
-    const s = (elapsed % 60).toString().padStart(2, '0');
-    el.textContent = `${m}:${s}`;
+    const s = Math.floor((Date.now() - started.getTime()) / 1000);
+    el.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   };
-
-  display();
-  _timerInterval = setInterval(display, 1000);
+  tick();
+  _timerInterval = setInterval(tick, 1000);
 }
 
-// ── Week strip HTML ────────────────────────────────────────
+// ── Week strip ─────────────────────────────────────────────
 
 function _weekStripHTML(weekDays, completedDates) {
   const todayStr = todayISO();
@@ -548,11 +556,9 @@ function _weekStripHTML(weekDays, completedDates) {
           <div class="week-day">
             <span class="week-day-label">${d.label}</span>
             <div class="${dotClass}">${d.dayNum}</div>
-          </div>
-        `;
+          </div>`;
       }).join('')}
-    </div>
-  `;
+    </div>`;
 }
 
 // ── Utils ──────────────────────────────────────────────────
@@ -561,8 +567,7 @@ function _capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function _getGroupExerciseCount(groupId) {
-  const custom = getCustomExercises().filter(e => e.muscleGroup === groupId).length;
-  const pred   = PREDEFINED_EXERCISES.filter(e => e.muscleGroup === groupId).length;
-  return pred + custom;
+function _groupName(muscleGroupId) {
+  if (muscleGroupId === 'general') return GENERAL_GROUP.shortName;
+  return MUSCLE_GROUPS.find(g => g.id === muscleGroupId)?.shortName ?? muscleGroupId;
 }
