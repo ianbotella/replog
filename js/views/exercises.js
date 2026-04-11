@@ -1,26 +1,36 @@
 /**
  * exercises.js — Vista "Ejercicios"
- * Biblioteca de ejercicios: predefinidos + custom.
- * Permite buscar, filtrar por grupo y agregar ejercicios personalizados.
+ * Biblioteca de ejercicios: predefinidos + custom + externos (free-exercise-db).
+ * Filtra por categoría específica (Pecho, Tríceps, Espalda, etc.).
  */
 
 import {
   getCustomExercises, saveCustomExercise, deleteCustomExercise,
 } from '../store.js';
 import { PREDEFINED_EXERCISES, MUSCLE_GROUPS, GENERAL_GROUP } from '../data/exercises.js';
+import { fetchExternalExercises } from '../data/freeExerciseDb.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
-let _container    = null;
-let _filterGroup  = 'all';
-let _searchQuery  = '';
+let _container      = null;
+let _filterCategory = 'all';
+let _searchQuery    = '';
+let _extExercises   = [];
+let _extLoading     = false;
+
+// Orden preferido de chips de filtro
+const CATEGORY_ORDER = [
+  'Pecho', 'Tríceps', 'Espalda', 'Bíceps', 'Hombros', 'Piernas',
+  'Abdominales', 'Antebrazos', 'Cuello', 'Calentamiento', 'Estiramiento',
+];
 
 export const ExercisesView = {
   render(container) {
-    _container   = container;
-    _filterGroup = 'all';
-    _searchQuery = '';
+    _container      = container;
+    _filterCategory = 'all';
+    _searchQuery    = '';
     _render();
+    _loadExternal();
   },
   destroy() {},
 };
@@ -29,7 +39,7 @@ export const ExercisesView = {
 
 function _render() {
   const custom = getCustomExercises();
-  const all    = [...PREDEFINED_EXERCISES, ...custom];
+  const all    = [...PREDEFINED_EXERCISES, ...custom, ..._extExercises];
   const total  = all.length;
 
   _container.innerHTML = `
@@ -37,7 +47,7 @@ function _render() {
       <div class="section-header">
         <div>
           <h1 class="page-title">Ejercicios</h1>
-          <p class="page-subtitle">${total} en la biblioteca</p>
+          <p class="page-subtitle" id="ex-subtitle">${_subtitleText(total)}</p>
         </div>
         <button class="btn btn-primary btn-sm" id="add-custom-btn">
           <i data-lucide="plus"></i> Nuevo
@@ -51,17 +61,11 @@ function _render() {
           placeholder="Buscar ejercicio..." value="${_searchQuery}">
       </div>
 
-      <!-- Filtro por grupo muscular -->
-      <div class="chip-group" id="group-filter" style="margin-bottom:var(--space-5)">
-        <button class="chip ${_filterGroup === 'all' ? 'active' : ''}" data-group="all">Todos</button>
-        ${MUSCLE_GROUPS.map(g => `
-          <button class="chip ${_filterGroup === g.id ? 'active' : ''}" data-group="${g.id}">
-            ${g.shortName}
-          </button>
-        `).join('')}
-        <button class="chip ${_filterGroup === 'general' ? 'active' : ''}" data-group="general">
-          ${GENERAL_GROUP.shortName}
-        </button>
+      <!-- Filtro por categoría -->
+      <div class="chip-group" id="cat-filter"
+           style="margin-bottom:var(--space-5);flex-wrap:nowrap;overflow-x:auto;padding-bottom:var(--space-1)">
+        <button class="chip ${_filterCategory === 'all' ? 'active' : ''}" data-cat="all" style="flex-shrink:0">Todos</button>
+        ${_categoryChipsHTML(all)}
       </div>
 
       <!-- Lista de ejercicios -->
@@ -75,12 +79,47 @@ function _render() {
   if (window.lucide) window.lucide.createIcons({ nodes: [_container] });
 }
 
+function _subtitleText(total) {
+  return _extLoading
+    ? `${total} en la biblioteca · <span style="color:var(--text-tertiary)">cargando más...</span>`
+    : `${total} en la biblioteca`;
+}
+
+function _categoryChipsHTML(all) {
+  const available = new Set(all.map(ex => ex.category));
+  const ordered   = [
+    ...CATEGORY_ORDER.filter(c => available.has(c)),
+    ...[...available].filter(c => !CATEGORY_ORDER.includes(c)).sort(),
+  ];
+  return ordered.map(cat => `
+    <button class="chip ${_filterCategory === cat ? 'active' : ''}" data-cat="${cat}" style="flex-shrink:0">${cat}</button>
+  `).join('');
+}
+
+async function _loadExternal() {
+  if (_extExercises.length > 0) return; // ya cargados
+  _extLoading = true;
+  _updateSubtitle();
+  const exercises = await fetchExternalExercises();
+  _extLoading  = false;
+  if (!_container) return; // vista destruida mientras cargaba
+  _extExercises = exercises;
+  _render(); // re-render completo con los datos externos
+}
+
+function _updateSubtitle() {
+  const sub = _container?.querySelector('#ex-subtitle');
+  if (!sub) return;
+  const custom = getCustomExercises();
+  const total  = PREDEFINED_EXERCISES.length + custom.length + _extExercises.length;
+  sub.innerHTML = _subtitleText(total);
+}
+
 function _exerciseListHTML(all) {
-  // Aplicar filtros
-  let filtered = all.filter(ex => {
-    const matchGroup  = _filterGroup === 'all' || ex.muscleGroup === _filterGroup;
+  const filtered = all.filter(ex => {
+    const matchCat    = _filterCategory === 'all' || ex.category === _filterCategory;
     const matchSearch = ex.name.toLowerCase().includes(_searchQuery.toLowerCase());
-    return matchGroup && matchSearch;
+    return matchCat && matchSearch;
   });
 
   if (filtered.length === 0) {
@@ -93,18 +132,22 @@ function _exerciseListHTML(all) {
     `;
   }
 
-  // Agrupar por categoría
+  // Agrupar por categoría en el orden definido
   const byCat = {};
   filtered.forEach(ex => {
-    const key = ex.category;
-    if (!byCat[key]) byCat[key] = [];
-    byCat[key].push(ex);
+    if (!byCat[ex.category]) byCat[ex.category] = [];
+    byCat[ex.category].push(ex);
   });
 
-  return Object.entries(byCat).map(([cat, exs]) => `
+  const orderedCats = [
+    ...CATEGORY_ORDER.filter(c => byCat[c]),
+    ...Object.keys(byCat).filter(c => !CATEGORY_ORDER.includes(c)).sort(),
+  ];
+
+  return orderedCats.map(cat => `
     <div class="exercise-group-header">${cat}</div>
     <div class="exercise-list" style="margin-bottom:var(--space-4)">
-      ${exs.map(ex => _exerciseItemHTML(ex)).join('')}
+      ${byCat[cat].map(ex => _exerciseItemHTML(ex)).join('')}
     </div>
   `).join('');
 }
@@ -114,18 +157,21 @@ function _exerciseItemHTML(ex) {
     ? GENERAL_GROUP
     : MUSCLE_GROUPS.find(g => g.id === ex.muscleGroup);
 
-  const typeLabel = _typeLabel(ex.type, ex.metric);
-  const metaText  = ex.custom
-    ? `${group?.name ?? ex.muscleGroup} · <span style="color:var(--accent-primary)">Personalizado</span>`
-    : typeLabel
-      ? `${group?.name ?? ex.muscleGroup} · ${typeLabel}`
-      : group?.name ?? ex.muscleGroup;
+  let metaText = '';
+  if (ex.custom) {
+    metaText = `<span style="color:var(--accent-primary)">Personalizado</span>`;
+  } else if (ex.external) {
+    const parts = [ex.equipment, ex.level].filter(Boolean);
+    metaText = parts.join(' · ');
+  } else {
+    metaText = _typeLabel(ex.type, ex.metric);
+  }
 
   return `
     <div class="exercise-item" data-id="${ex.id}">
       <div class="exercise-item-info">
         <div class="exercise-item-name">${ex.name}</div>
-        <div class="exercise-item-meta">${metaText}</div>
+        ${metaText ? `<div class="exercise-item-meta">${metaText}</div>` : ''}
       </div>
       <div class="exercise-item-actions">
         <span class="badge ${group?.badgeClass ?? 'badge-neutral'}">${ex.category}</span>
@@ -139,7 +185,6 @@ function _exerciseItemHTML(ex) {
   `;
 }
 
-/** Etiqueta legible del tipo de ejercicio para mostrar en la UI. */
 function _typeLabel(type, metric) {
   if (type === 'cardio')   return 'Cardio';
   if (type === 'stretch')  return 'Estiramiento';
@@ -150,23 +195,20 @@ function _typeLabel(type, metric) {
 // ── Events ─────────────────────────────────────────────────
 
 function _bindEvents() {
-  // Búsqueda
   _container.querySelector('#ex-search').addEventListener('input', e => {
     _searchQuery = e.target.value;
     _reRenderList();
   });
 
-  // Filtro por grupo
-  _container.querySelector('#group-filter').addEventListener('click', e => {
+  _container.querySelector('#cat-filter').addEventListener('click', e => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
-    _filterGroup = chip.dataset.group;
-    _container.querySelectorAll('#group-filter .chip').forEach(c =>
-      c.classList.toggle('active', c.dataset.group === _filterGroup));
+    _filterCategory = chip.dataset.cat;
+    _container.querySelectorAll('#cat-filter .chip').forEach(c =>
+      c.classList.toggle('active', c.dataset.cat === _filterCategory));
     _reRenderList();
   });
 
-  // Eliminar ejercicio custom
   _container.addEventListener('click', e => {
     const btn = e.target.closest('.delete-ex-btn');
     if (!btn) return;
@@ -176,13 +218,12 @@ function _bindEvents() {
     _reRenderList();
   });
 
-  // Agregar ejercicio custom
   _container.querySelector('#add-custom-btn').addEventListener('click', _openAddModal);
 }
 
 function _reRenderList() {
   const custom = getCustomExercises();
-  const all    = [...PREDEFINED_EXERCISES, ...custom];
+  const all    = [...PREDEFINED_EXERCISES, ...custom, ..._extExercises];
   const list   = _container.querySelector('#exercises-list');
   if (!list) return;
   list.innerHTML = _exerciseListHTML(all);
@@ -192,13 +233,12 @@ function _reRenderList() {
 // ── Modal agregar ejercicio custom ─────────────────────────
 
 function _openAddModal() {
-  // Tipos de ejercicio disponibles para custom
   const typeOptions = [
-    { value: 'strength', label: 'Fuerza (peso + reps)' },
-    { value: 'cardio',   label: 'Cardio (tiempo + vel. + incl.)' },
-    { value: 'mobility', label: 'Movilidad (reps)' },
+    { value: 'strength',      label: 'Fuerza (peso + reps)' },
+    { value: 'cardio',        label: 'Cardio (tiempo + vel. + incl.)' },
+    { value: 'mobility',      label: 'Movilidad (reps)' },
     { value: 'mobility-time', label: 'Movilidad (tiempo en seg)' },
-    { value: 'stretch',  label: 'Estiramiento (duración en seg)' },
+    { value: 'stretch',       label: 'Estiramiento (duración en seg)' },
   ];
 
   const allGroups = [
@@ -241,7 +281,6 @@ function _openAddModal() {
   });
 
   const modalEl = body.closest('.modal-container');
-
   modalEl.querySelector('#modal-cancel-btn').addEventListener('click', closeModal);
 
   modalEl.querySelector('#modal-save-btn').addEventListener('click', () => {
@@ -255,7 +294,6 @@ function _openAddModal() {
       return;
     }
 
-    // Mapear el valor del select al tipo + metric
     const type   = typeRaw === 'mobility-time' ? 'mobility' : typeRaw;
     const metric = typeRaw === 'mobility-time' ? 'time' : (typeRaw === 'mobility' ? 'reps' : undefined);
 
@@ -265,7 +303,6 @@ function _openAddModal() {
     _reRenderList();
   });
 
-  // Auto-sugerir categoría y tipo al cambiar grupo
   body.querySelector('#new-ex-group').addEventListener('change', e => {
     const gId  = e.target.value;
     const cat  = body.querySelector('#new-ex-category');
@@ -278,7 +315,6 @@ function _openAddModal() {
         if (g) cat.placeholder = `Ej: ${g.name.split('+')[0].trim()}`;
       }
     }
-    // Sugerir tipo según grupo
     if (gId === 'general' && type) type.value = 'mobility';
   });
 
