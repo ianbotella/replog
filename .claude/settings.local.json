@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json\")",
+      "Bash(python3 -c ':*)"
     ]
   }
 }
