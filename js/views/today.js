@@ -14,7 +14,7 @@ import {
 import {
   MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
 } from '../data/exercises.js';
-import { fetchExternalExercises } from '../data/freeExerciseDb.js';
+import { fetchExternalExercises, IMG_BASE_URL } from '../data/freeExerciseDb.js';
 import { ROUTINE_TEMPLATES } from '../data/routineTemplates.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
@@ -23,6 +23,7 @@ import { showToast } from '../components/toast.js';
 let _session       = null;
 let _container     = null;
 let _timerInterval = null;
+let _extExercises  = []; // caché de ejercicios externos para imágenes de referencia
 
 // ── Entry point ────────────────────────────────────────────
 
@@ -190,14 +191,17 @@ function _renderActiveSession() {
 
   _bindActiveSessionEvents();
   _startTimer();
+  _loadExtForSession(); // carga imágenes de referencia en segundo plano
 }
 
 // ── Exercise block HTML ────────────────────────────────────
 
 function _exerciseBlockHTML(ex, idx) {
-  const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
-  const type   = libEx?.type   ?? ex.type   ?? 'strength';
-  const metric = libEx?.metric ?? ex.metric ?? 'reps';
+  const libEx   = findExerciseById(ex.exerciseId, getCustomExercises());
+  const type    = libEx?.type   ?? ex.type   ?? 'strength';
+  const metric  = libEx?.metric ?? ex.metric ?? 'reps';
+  const apiEx   = _extExercises.find(e => e.id === ex.exerciseId);
+  const hasImgs = apiEx?.images?.length > 0;
 
   const emptyMsg  = `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`;
   const setsHTML  = ex.sets.length === 0
@@ -219,9 +223,14 @@ function _exerciseBlockHTML(ex, idx) {
           </div>
           ${ex.tip ? `<div style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">${ex.tip}</div>` : ''}
         </div>
-        <button class="icon-btn delete-exercise-btn" data-ex="${idx}" aria-label="Eliminar ejercicio">
-          <i data-lucide="trash-2"></i>
-        </button>
+        <div style="display:flex;align-items:center;gap:var(--space-1)">
+          ${hasImgs ? `<button class="icon-btn view-images-btn" data-ex="${idx}" aria-label="Ver referencia">
+            <i data-lucide="image" style="width:15px;height:15px;color:var(--text-tertiary)"></i>
+          </button>` : ''}
+          <button class="icon-btn delete-exercise-btn" data-ex="${idx}" aria-label="Eliminar ejercicio">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
       </div>
       <div class="sets-table" id="sets-table-${idx}">
         ${setsHTML}
@@ -313,6 +322,57 @@ function _typeBadgeLabel(type, metric) {
   return '';
 }
 
+// ── Imágenes de referencia ─────────────────────────────────
+
+async function _loadExtForSession() {
+  if (_extExercises.length > 0) return; // ya cargados
+  const exercises = await fetchExternalExercises();
+  if (!_container) return; // vista destruida mientras cargaba
+  _extExercises = exercises;
+  // Re-renderizar bloques para que aparezcan los iconos de imagen
+  _reRenderExercisesList();
+}
+
+function _openExerciseDetailModal(ex, apiEx) {
+  const imagesHTML = apiEx.images?.length
+    ? `<div style="display:grid;grid-template-columns:${apiEx.images.length > 1 ? '1fr 1fr' : '1fr'};gap:var(--space-3);margin-bottom:var(--space-4)">
+        ${apiEx.images.map(img => `
+          <img src="${IMG_BASE_URL}${img}" alt="${ex.name}"
+               style="width:100%;border-radius:var(--radius-md);background:var(--bg-elevated);display:block"
+               onerror="this.style.display='none'">
+        `).join('')}
+      </div>`
+    : '';
+
+  const infoRows = [
+    apiEx.equipment ? `
+      <div style="display:flex;justify-content:space-between;padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle);font-size:var(--text-sm)">
+        <span style="color:var(--text-secondary)">Equipamiento</span>
+        <span>${apiEx.equipment}</span>
+      </div>` : '',
+    apiEx.level ? `
+      <div style="display:flex;justify-content:space-between;padding:var(--space-2) 0;font-size:var(--text-sm)">
+        <span style="color:var(--text-secondary)">Nivel</span>
+        <span>${apiEx.level.charAt(0).toUpperCase() + apiEx.level.slice(1)}</span>
+      </div>` : '',
+  ].filter(Boolean).join('');
+
+  const body = openModal({
+    title: ex.name,
+    body: `
+      ${imagesHTML}
+      ${infoRows ? `<div>${infoRows}</div>` : ''}
+      ${ex.tip ? `<div style="margin-top:var(--space-4);padding:var(--space-3);background:var(--bg-elevated);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--text-secondary)">
+        <strong style="color:var(--text-primary)">Indicación: </strong>${ex.tip}
+      </div>` : ''}
+    `,
+    footer: `<button class="btn btn-primary" id="detail-close-btn" style="flex:1">Cerrar</button>`,
+  });
+
+  body.closest('.modal-container').querySelector('#detail-close-btn')
+    .addEventListener('click', closeModal);
+}
+
 // ── Event binding ──────────────────────────────────────────
 
 function _bindActiveSessionEvents() {
@@ -328,6 +388,15 @@ function _bindActiveSessionEvents() {
 }
 
 function _handleExerciseListClick(e) {
+  const imgBtn = e.target.closest('.view-images-btn');
+  if (imgBtn) {
+    const exIdx = parseInt(imgBtn.dataset.ex, 10);
+    const ex    = _session.exercises[exIdx];
+    const apiEx = _extExercises.find(a => a.id === ex.exerciseId);
+    if (apiEx) _openExerciseDetailModal(ex, apiEx);
+    return;
+  }
+
   const addSetBtn = e.target.closest('.add-set-btn');
   if (addSetBtn) { _addSet(parseInt(addSetBtn.dataset.ex, 10)); return; }
 
