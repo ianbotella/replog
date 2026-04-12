@@ -1,6 +1,6 @@
 # Replog
 
-**Replog** es una aplicación web progresiva para registrar y analizar entrenamientos de gimnasio. Diseñada para correr directamente en el navegador, sin instalación, sin backend y sin dependencias de build.
+**Replog** es una aplicación web progresiva (PWA) para registrar y analizar entrenamientos de gimnasio. Instalable en la pantalla de inicio de cualquier dispositivo, funciona completamente offline, sin backend y sin dependencias de build.
 
 ---
 
@@ -56,6 +56,14 @@
 - Ejercicios agrupados por categoría muscular con filtros
 - Creá y eliminá ejercicios custom persistidos en localStorage
 - Soporte para tipos: Fuerza, Cardio, Movilidad, Estiramiento
+
+### Instalación como app nativa
+
+Replog es una PWA instalable. Una vez instalada, aparece en la pantalla de inicio y se abre sin barra de navegador.
+
+- **Android (Chrome)**: aparece un banner automático o usá el menú ⋮ → "Agregar a pantalla de inicio". También podés ir a **Config. → Instalar app** desde dentro de la app.
+- **iOS (Safari)**: tocá el botón Compartir → "Agregar a pantalla de inicio".
+- **Desktop (Chrome / Edge)**: hacé clic en el ícono de instalación en la barra de direcciones, o usá el menú → "Instalar Replog".
 
 ### Configuración — Datos y backup
 - **Exportar JSON**: backup completo y reimportable (sesiones, ejercicios, PRs, config)
@@ -139,6 +147,7 @@ El CSV incluye una fila por sesión con: fecha, grupo muscular, duración, canti
 | Almacenamiento | `localStorage` (sin servidor, sin cuenta) |
 | Navegación | SPA con hash router (`#/today`, `#/history`, `#/progress`, `#/exercises`, `#/settings`) |
 | Estilos | CSS puro con custom properties (design tokens) |
+| PWA | Service Worker (Cache First), Web App Manifest, instalable en homescreen |
 | Deploy | GitHub Pages (rama main, raíz) |
 
 **Sin frameworks. Sin bundler. Sin backend. Sin dependencias de npm.**
@@ -150,16 +159,22 @@ El CSV incluye una fila por sesión con: fecha, grupo muscular, duración, canti
 ```
 replog/
 ├── index.html
+├── manifest.json          # Web App Manifest (PWA)
+├── sw.js                  # Service Worker (Cache First, offline)
 ├── css/
 │   ├── variables.css      # Design tokens (colores, tipografía, espaciado)
 │   ├── reset.css
 │   ├── layout.css         # Shell, header, bottom nav
 │   ├── components.css     # Botones, inputs, badges, toasts, modales
 │   └── views.css          # Estilos específicos por vista
+├── assets/
+│   ├── favicon.svg        # Favicon del navegador
+│   └── icon.svg           # Ícono PWA (maskable, 512×512 viewBox)
 └── js/
-    ├── app.js             # Entry point, router init, tema
+    ├── app.js             # Entry point, router init, tema, PWA init
     ├── router.js          # Hash router
     ├── store.js           # CRUD localStorage + backup + PRs + date utils
+    ├── pwa.js             # SW registration + install prompt API
     ├── data/
     │   ├── exercises.js        # Definición de grupos musculares
     │   ├── freeExerciseDb.js   # Biblioteca de ejercicios externos
@@ -169,7 +184,7 @@ replog/
     │   ├── history.js     # Historial de sesiones (share, PR badge)
     │   ├── progress.js    # Análisis: ejercicio, grupos, PRs, estadísticas
     │   ├── exercises.js   # Biblioteca de ejercicios
-    │   └── settings.js    # Exportar / importar / borrar datos
+    │   └── settings.js    # Exportar / importar / borrar datos / instalar app
     ├── utils/
     │   └── share.js       # Web Share API + clipboard fallback
     └── components/
@@ -211,7 +226,9 @@ No requiere CI, build step ni variables de entorno.
 
 ## Uso offline
 
-Al no requerir backend, Replog funciona sin conexión a internet una vez cargado en el navegador (los CDN de Chart.js y Lucide solo se necesitan en la primera carga). Todos los datos quedan en el dispositivo del usuario.
+Replog incluye un **Service Worker** con estrategia Cache First. En la primera carga, todos los assets se pre-cachean — incluyendo los scripts de Chart.js y Lucide desde CDN. A partir de entonces, la app funciona **completamente sin conexión**: no se necesita internet para registrar sesiones, ver el historial ni consultar el progreso.
+
+Para forzar una actualización tras un nuevo deploy, basta con incrementar `CACHE_NAME` en `sw.js` (ej: `replog-v1` → `replog-v2`).
 
 ---
 
