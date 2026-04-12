@@ -62,7 +62,7 @@ function uid() {
 // ── Settings ───────────────────────────────────────────────
 
 export function getSettings() {
-  return read(KEYS.SETTINGS, { theme: 'dark' });
+  return read(KEYS.SETTINGS, { theme: 'dark', restTimerDuration: 90 });
 }
 
 export function saveSettings(partial) {
@@ -179,6 +179,26 @@ export function saveCustomExercise(exercise) {
 export function deleteCustomExercise(id) {
   const exercises = getCustomExercises().filter(e => e.id !== id);
   write(KEYS.EXERCISES, exercises);
+}
+
+/**
+ * Devuelve los datos de la última sesión anterior a hoy donde se registró
+ * el ejercicio con ese ID. Busca el más reciente, ignorando la sesión de hoy.
+ * @returns {{ date: string, sets: object[] } | null}
+ */
+export function getLastExerciseSession(exerciseId) {
+  const today    = todayISO();
+  const sessions = getSessions()
+    .filter(s => s.date < today)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const session of sessions) {
+    const ex = session.exercises.find(e => e.exerciseId === exerciseId);
+    if (ex && ex.sets && ex.sets.length > 0) {
+      return { date: session.date, sets: ex.sets };
+    }
+  }
+  return null;
 }
 
 // ── Date utils ─────────────────────────────────────────────

@@ -68,8 +68,16 @@ function _sessionCardHTML(session) {
   const dur       = session.durationMin ? `${session.durationMin} min` : '';
 
   const exerciseRows = session.exercises.map(ex => {
-    const bestSet  = _bestSet(ex.sets);
-    const setsText = `${ex.sets.length} serie${ex.sets.length !== 1 ? 's' : ''}${bestSet ? ` · ${bestSet.weight}kg × ${bestSet.reps}` : ''}`;
+    const bestSet = _bestSet(ex.sets);
+    // RPE / RIR: mostrar el primer valor registrado si existe
+    const rpeVal  = ex.sets.find(s => s.rpe)?.rpe;
+    const rirEntry = ex.sets.find(s => s.rir !== undefined && s.rir !== null);
+    const rpeText = rpeVal
+      ? ` · RPE ${rpeVal}`
+      : rirEntry !== undefined
+        ? ` · RIR ${rirEntry.rir}`
+        : '';
+    const setsText = `${ex.sets.length} serie${ex.sets.length !== 1 ? 's' : ''}${bestSet ? ` · ${bestSet.weight}kg × ${bestSet.reps}` : ''}${rpeText}`;
     return `
       <div class="history-exercise-item">
         <span>${ex.name}</span>

@@ -295,6 +295,10 @@
 
 .sets-footer {
   padding: var(--space-3) var(--space-5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -508,6 +512,159 @@
 .ex-already-added .exercise-item-name {
   text-decoration: line-through;
   text-decoration-color: var(--accent-primary);
+}
+
+/* Exercise tip and last session reference */
+.exercise-tip {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.exercise-last-ref {
+  font-size: var(--text-xs);
+  color: var(--accent-primary);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* ── RPE / RIR column ────────────────────────────────────── */
+.sets-header-rpe {
+  grid-template-columns: 28px 1fr 1fr 44px 36px;
+}
+
+.set-row-rpe {
+  grid-template-columns: 28px 1fr 1fr 44px 36px;
+}
+
+.set-input-rpe {
+  padding: var(--space-2) var(--space-1);
+  font-size: var(--text-sm);
+  text-align: center;
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--transition-fast);
+}
+
+.set-input-rpe:focus {
+  border-color: var(--accent-primary);
+  outline: none;
+}
+
+/* ── Superset group ───────────────────────────────────────── */
+.superset-group {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--accent-primary);
+  margin-bottom: var(--space-3);
+}
+
+.superset-group > .exercise-block {
+  margin-bottom: var(--space-2);
+}
+
+.superset-group > .exercise-block:last-child {
+  margin-bottom: 0;
+}
+
+.superset-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent-primary);
+  margin-bottom: var(--space-2);
+}
+
+/* ── Rest Timer Overlay ──────────────────────────────────── */
+.rest-timer-overlay {
+  position: fixed;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - var(--space-8));
+  max-width: 440px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  z-index: 150;
+  overflow: hidden;
+  display: none;
+  pointer-events: all;
+}
+
+.rest-timer-overlay.active {
+  display: block;
+  animation: rest-timer-in 220ms ease;
+}
+
+@keyframes rest-timer-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.rest-timer-progress-track {
+  height: 3px;
+  background: var(--border-subtle);
+  width: 100%;
+}
+
+.rest-timer-progress-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  transition: width 1s linear;
+  border-radius: var(--radius-full);
+}
+
+.rest-timer-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-2);
+}
+
+.rest-timer-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.rest-timer-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.rest-timer-duration-chips {
+  display: flex;
+  gap: 4px;
+}
+
+.rest-timer-count {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-primary);
+  letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+
+.rest-timer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
 }
 
 /* Inline add exercise row (in active session) */
