@@ -38,6 +38,7 @@ const KEYS = {
   SESSIONS:  'replog_sessions',
   EXERCISES: 'replog_exercises',
   SETTINGS:  'replog_settings',
+  PRS:       'replog_prs',
 };
 
 // ── Helpers ────────────────────────────────────────────────
@@ -199,6 +200,48 @@ export function getLastExerciseSession(exerciseId) {
     }
   }
   return null;
+}
+
+// ── Personal Records (PRs) ─────────────────────────────────
+
+/**
+ * Devuelve todos los PRs guardados.
+ * Estructura: { [exerciseId]: { exerciseId, name, weight, date } }
+ */
+export function getPRs() {
+  return read(KEYS.PRS, {});
+}
+
+/**
+ * Analiza una sesión recién guardada, actualiza los PRs si corresponde,
+ * y devuelve la lista de nuevos PRs detectados en esta sesión.
+ * @param {object} session
+ * @returns {Array<{exerciseId, name, weight}>}
+ */
+export function checkAndUpdatePRs(session) {
+  const prs    = getPRs();
+  const newPRs = [];
+
+  for (const ex of session.exercises) {
+    const validSets = ex.sets.filter(s => s.weight > 0 && s.reps > 0);
+    if (!validSets.length) continue;
+
+    const maxWeight = Math.max(...validSets.map(s => s.weight));
+    const current   = prs[ex.exerciseId];
+
+    if (!current || maxWeight > current.weight) {
+      prs[ex.exerciseId] = {
+        exerciseId: ex.exerciseId,
+        name:       ex.name,
+        weight:     maxWeight,
+        date:       session.date,
+      };
+      newPRs.push({ exerciseId: ex.exerciseId, name: ex.name, weight: maxWeight });
+    }
+  }
+
+  write(KEYS.PRS, prs);
+  return newPRs;
 }
 
 // ── Date utils ─────────────────────────────────────────────

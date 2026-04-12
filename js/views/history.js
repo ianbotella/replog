@@ -4,7 +4,7 @@
  */
 
 import {
-  getSessionsSorted, deleteSession, formatDateDisplay, getCustomExercises,
+  getSessionsSorted, deleteSession, formatDateDisplay, getCustomExercises, getPRs,
 } from '../store.js';
 import { getSessionGroupDisplay } from '../data/exercises.js';
 import { showToast } from '../components/toast.js';
@@ -66,13 +66,17 @@ function _sessionCardHTML(session) {
   const setCount  = session.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const totalVol  = _calcVolume(session);
   const dur       = session.durationMin ? `${session.durationMin} min` : '';
+  const prs       = getPRs();
 
   const exerciseRows = session.exercises.map(ex => {
-    const bestSet = _bestSet(ex.sets);
+    const bestSet  = _bestSet(ex.sets);
+    // PR badge: esta sesión es donde se estableció el PR actual del ejercicio
+    const isPR     = prs[ex.exerciseId]?.date === session.date && bestSet !== null
+                     && prs[ex.exerciseId]?.weight === bestSet.weight;
     // RPE / RIR: mostrar el primer valor registrado si existe
-    const rpeVal  = ex.sets.find(s => s.rpe)?.rpe;
+    const rpeVal   = ex.sets.find(s => s.rpe)?.rpe;
     const rirEntry = ex.sets.find(s => s.rir !== undefined && s.rir !== null);
-    const rpeText = rpeVal
+    const rpeText  = rpeVal
       ? ` · RPE ${rpeVal}`
       : rirEntry !== undefined
         ? ` · RIR ${rirEntry.rir}`
@@ -80,7 +84,7 @@ function _sessionCardHTML(session) {
     const setsText = `${ex.sets.length} serie${ex.sets.length !== 1 ? 's' : ''}${bestSet ? ` · ${bestSet.weight}kg × ${bestSet.reps}` : ''}${rpeText}`;
     return `
       <div class="history-exercise-item">
-        <span>${ex.name}</span>
+        <span>${ex.name}${isPR ? ' <span class="pr-badge">🏆 PR</span>' : ''}</span>
         <span class="history-sets-summary">${setsText}</span>
       </div>
     `;

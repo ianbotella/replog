@@ -1,37 +1,62 @@
 /**
  * progress.js — Vista "Progreso"
- * Muestra un gráfico de evolución de peso máximo por ejercicio.
+ *
+ * Tabs:
+ *   1. Ejercicio  — gráfico de línea (peso máx. o volumen) por ejercicio
+ *   2. Grupos     — gráfico de barras de sesiones por grupo muscular
+ *   3. Récords    — lista de PRs personales
+ *   4. Estadísticas — métricas semanales/mensuales, racha, distribución
  */
 
-import { getExerciseHistory, getSessions, getCustomExercises } from '../store.js';
+import {
+  getExerciseHistory, getSessions, getCustomExercises, getPRs, todayISO,
+} from '../store.js';
 import { MUSCLE_GROUPS } from '../data/exercises.js';
 
-let _container  = null;
-let _chart      = null;
-let _selectedEx = null;
+// Hex fijos de los grupos musculares (mirror de variables.css)
+const GROUP_COLORS = {
+  'chest-triceps':  '#f97316',
+  'back-biceps':    '#3b82f6',
+  'shoulders-legs': '#a855f7',
+  'general':        '#14b8a6',
+};
+
+// ── Estado del módulo ──────────────────────────────────────
+
+let _container   = null;
+let _chart       = null;
+let _groupChart  = null;
+let _activeTab   = 'ejercicio';  // 'ejercicio' | 'grupos' | 'records' | 'stats'
+let _selectedEx  = null;
+let _chartMetric = 'weight';     // 'weight' | 'volume'
+let _groupPeriod = '1m';         // '1w' | '1m' | '3m'
+let _statsPeriod = '1m';         // '1w' | '1m' | '3m' | 'all'
+
+let _clickHandler = null;
+let _inputHandler = null;
+
+// ── Entry point ────────────────────────────────────────────
 
 export const ProgressView = {
   render(container) {
-    _container = container;
-    _chart     = null;
-
-    // Ejercicio seleccionado por defecto: el primero con historial
+    _container  = container;
     _selectedEx = _getDefaultExercise();
+    _bindEvents();
     _render();
   },
   destroy() {
-    if (_chart) { _chart.destroy(); _chart = null; }
+    _destroyCharts();
+    if (_clickHandler) { _container?.removeEventListener('click', _clickHandler); _clickHandler = null; }
+    if (_inputHandler) { _container?.removeEventListener('input', _inputHandler); _inputHandler = null; }
   },
 };
 
-// ── Render ─────────────────────────────────────────────────
+// ── Main render ────────────────────────────────────────────
 
 function _render() {
-  const allExercisesWithData = _getExercisesWithHistory();
+  _destroyCharts();
 
-  // Stats globales
   const sessions  = getSessions();
-  const totalSess = sessions.length;
   const totalVol  = sessions.reduce((sum, s) =>
     sum + s.exercises.reduce((es, ex) =>
       es + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0), 0);
@@ -41,12 +66,11 @@ function _render() {
   _container.innerHTML = `
     <div class="view">
       <h1 class="page-title">Progreso</h1>
-      <p class="page-subtitle">Seguí tu evolución por ejercicio</p>
+      <p class="page-subtitle">Seguí tu evolución</p>
 
-      <!-- Stats globales -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value">${totalSess}</div>
+          <div class="stat-value">${sessions.length}</div>
           <div class="stat-label">Sesiones</div>
         </div>
         <div class="stat-card">
@@ -59,64 +83,88 @@ function _render() {
         </div>
       </div>
 
-      ${allExercisesWithData.length === 0 ? _noDataHTML() : _chartSectionHTML(allExercisesWithData)}
+      <div class="progress-tabs">
+        ${['ejercicio', 'grupos', 'records', 'stats'].map(t => `
+          <button class="progress-tab${_activeTab === t ? ' active' : ''}" data-tab="${t}">
+            ${_tabLabel(t)}
+          </button>
+        `).join('')}
+      </div>
+
+      <div id="progress-tab-content">
+        ${_renderTabContent()}
+      </div>
     </div>
   `;
 
-  if (allExercisesWithData.length > 0) {
-    _bindEvents(allExercisesWithData);
-    _renderChart();
-  }
-
+  _renderCharts();
   if (window.lucide) window.lucide.createIcons({ nodes: [_container] });
 }
 
-function _chartSectionHTML(exercises) {
-  const group = _selectedEx
-    ? MUSCLE_GROUPS.find(g => g.id === exercises.find(e => e.id === _selectedEx)?.muscleGroup)
-    : null;
+function _tabLabel(tab) {
+  return { ejercicio: 'Ejercicio', grupos: 'Grupos', records: 'Récords', stats: 'Estadísticas' }[tab];
+}
 
-  const history = _selectedEx ? getExerciseHistory(_selectedEx) : [];
+function _renderTabContent() {
+  switch (_activeTab) {
+    case 'ejercicio': return _ejercicioTabHTML();
+    case 'grupos':    return _gruposTabHTML();
+    case 'records':   return _recordsTabHTML();
+    case 'stats':     return _statsTabHTML();
+    default:          return '';
+  }
+}
+
+// ── Tab: Ejercicio ─────────────────────────────────────────
+
+function _ejercicioTabHTML() {
+  const exercises = _getExercisesWithHistory();
+  if (!exercises.length) return _noDataHTML();
+
+  const history   = _selectedEx ? getExerciseHistory(_selectedEx) : [];
+  const exName    = exercises.find(e => e.id === _selectedEx)?.name ?? '';
   const maxWeight = history.length ? Math.max(...history.map(h => h.maxWeight)) : 0;
-  const firstDate = history.length ? history[0].date : '';
-  const progress  = history.length >= 2
-    ? (history[history.length - 1].maxWeight - history[0].maxWeight).toFixed(1)
-    : null;
+  const maxVol    = history.length ? Math.max(...history.map(h => h.totalVolume)) : 0;
+
+  let subtitleExtra = '';
+  if (history.length >= 2) {
+    const delta = _chartMetric === 'weight'
+      ? (history[history.length - 1].maxWeight - history[0].maxWeight).toFixed(1)
+      : (history[history.length - 1].totalVolume - history[0].totalVolume).toFixed(0);
+    subtitleExtra = ` · ${parseFloat(delta) >= 0 ? '+' : ''}${delta}${_chartMetric === 'weight' ? ' kg' : ' kg vol.'}`;
+  }
+
+  const subtitle = _chartMetric === 'weight'
+    ? `${history.length} registro${history.length !== 1 ? 's' : ''}${maxWeight ? ` · Mejor: ${maxWeight} kg` : ''}${subtitleExtra}`
+    : `${history.length} registro${history.length !== 1 ? 's' : ''}${maxVol ? ` · Máx: ${maxVol.toLocaleString('es-AR')} kg` : ''}${subtitleExtra}`;
 
   return `
-    <!-- Selector de ejercicio -->
-    <div class="section-header">
-      <span class="section-title">Ejercicio</span>
-    </div>
     <div class="search-bar" style="margin-bottom:var(--space-3)">
       <i data-lucide="search"></i>
       <input type="text" class="input-field" id="progress-search" placeholder="Buscar ejercicio...">
     </div>
-    <div class="chip-group" id="exercise-chips" style="margin-bottom:var(--space-5)">
-      ${exercises.map(ex => {
-        const g = MUSCLE_GROUPS.find(m => m.id === ex.muscleGroup);
-        return `
-          <button class="chip ${ex.id === _selectedEx ? 'active' : ''}" data-exercise-id="${ex.id}">
-            ${ex.name}
-          </button>
-        `;
-      }).join('')}
+    <div class="chip-group" id="exercise-chips" style="margin-bottom:var(--space-4)">
+      ${exercises.map(ex => `
+        <button class="chip${ex.id === _selectedEx ? ' active' : ''}" data-exercise-id="${ex.id}">${ex.name}</button>
+      `).join('')}
     </div>
 
-    <!-- Gráfico -->
     <div class="chart-card">
-      <div class="chart-title" id="chart-title">${_selectedEx ? exercises.find(e => e.id === _selectedEx)?.name : ''}</div>
-      <div class="chart-subtitle">
-        ${history.length} registro${history.length !== 1 ? 's' : ''}
-        ${maxWeight ? ` · Mejor: ${maxWeight} kg` : ''}
-        ${progress !== null ? ` · ${parseFloat(progress) >= 0 ? '+' : ''}${progress} kg` : ''}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-2)">
+        <div>
+          <div class="chart-title">${exName}</div>
+          <div class="chart-subtitle">${subtitle}</div>
+        </div>
+        <div class="metric-toggle">
+          <button class="metric-btn${_chartMetric === 'weight' ? ' active' : ''}" data-metric="weight">Peso máx.</button>
+          <button class="metric-btn${_chartMetric === 'volume' ? ' active' : ''}" data-metric="volume">Volumen</button>
+        </div>
       </div>
       <div class="chart-wrapper">
         <canvas id="progress-chart"></canvas>
       </div>
     </div>
 
-    <!-- Tabla de historial -->
     ${history.length > 0 ? _historyTableHTML(history) : ''}
   `;
 }
@@ -145,56 +193,211 @@ function _historyTableHTML(history) {
   `;
 }
 
-function _noDataHTML() {
+// ── Tab: Grupos ────────────────────────────────────────────
+
+function _gruposTabHTML() {
+  const periodSessions = _filterSessionsByPeriod(getSessions(), _groupPeriod);
+  const counts         = _getMuscleGroupCounts(periodSessions);
+  const hasData        = Object.values(counts).some(v => v > 0);
+
+  const PERIOD_LABELS = { '1w': 'Semana', '1m': 'Mes', '3m': '3 meses' };
+
+  const sorted = [...MUSCLE_GROUPS].sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
+  const maxCount = Math.max(...sorted.map(g => counts[g.id] || 0), 1);
+
   return `
-    <div class="empty-state">
-      <i data-lucide="bar-chart-3" style="width:48px;height:48px;color:var(--text-tertiary)"></i>
-      <h3>Sin datos todavía</h3>
-      <p>Registrá al menos una sesión para ver tu evolución aquí.</p>
+    <div class="chip-group" style="margin-bottom:var(--space-4)">
+      ${Object.entries(PERIOD_LABELS).map(([k, l]) => `
+        <button class="chip${_groupPeriod === k ? ' active' : ''}" data-group-period="${k}">${l}</button>
+      `).join('')}
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Sesiones por grupo muscular</div>
+      <div class="chart-subtitle">${_periodLabel(_groupPeriod)}</div>
+      <div class="chart-wrapper" style="height:200px">
+        <canvas id="group-chart"></canvas>
+      </div>
+    </div>
+
+    ${hasData ? `
+      <div class="chart-card">
+        ${sorted.map(g => {
+          const count = counts[g.id] || 0;
+          const pct   = (count / maxCount) * 100;
+          const color = GROUP_COLORS[g.id] ?? 'var(--accent-primary)';
+          return `
+            <div style="margin-bottom:var(--space-4)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-1)">
+                <span style="font-size:var(--text-sm);font-weight:var(--weight-medium)">${g.shortName}</span>
+                <span style="font-size:var(--text-sm);color:var(--text-secondary);font-variant-numeric:tabular-nums">${count} sesión${count !== 1 ? 'es' : ''}</span>
+              </div>
+              <div style="height:6px;background:var(--bg-hover);border-radius:var(--radius-full);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${color};border-radius:var(--radius-full);transition:width .4s ease"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    ` : `<div class="empty-state"><h3>Sin datos en este período</h3><p>Registrá sesiones para ver la distribución por grupo.</p></div>`}
+  `;
+}
+
+// ── Tab: Récords ───────────────────────────────────────────
+
+function _recordsTabHTML() {
+  const prs     = getPRs();
+  const entries = Object.values(prs).sort((a, b) => b.weight - a.weight);
+
+  if (!entries.length) {
+    return `
+      <div class="empty-state">
+        <i data-lucide="trophy" style="width:48px;height:48px;color:var(--text-tertiary)"></i>
+        <h3>Sin récords todavía</h3>
+        <p>Completá sesiones con ejercicios de fuerza para registrar tus PRs.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="chart-card" style="padding:0;overflow:hidden">
+      ${entries.map((pr, i) => `
+        <div class="pr-item${i < entries.length - 1 ? ' pr-item-border' : ''}">
+          <div style="min-width:0">
+            <div class="pr-item-name">${pr.name}</div>
+            <div class="pr-item-date">${pr.date ? pr.date.split('-').reverse().join('/') : ''}</div>
+          </div>
+          <div class="pr-item-weight">
+            <span style="font-size:var(--text-base)">🏆</span>
+            <span class="pr-item-kg">${pr.weight} kg</span>
+          </div>
+        </div>
+      `).join('')}
     </div>
   `;
 }
 
-// ── Chart ──────────────────────────────────────────────────
+// ── Tab: Estadísticas ──────────────────────────────────────
 
-function _renderChart() {
+function _statsTabHTML() {
+  const PERIOD_LABELS = { '1w': 'Semana', '1m': 'Mes', '3m': '3 meses', 'all': 'Todo' };
+  const allSessions    = getSessions();
+  const periodSessions = _filterSessionsByPeriod(allSessions, _statsPeriod);
+  const stats          = _calcStats(periodSessions, allSessions);
+
+  return `
+    <div class="chip-group" style="margin-bottom:var(--space-4)">
+      ${Object.entries(PERIOD_LABELS).map(([k, l]) => `
+        <button class="chip${_statsPeriod === k ? ' active' : ''}" data-stats-period="${k}">${l}</button>
+      `).join('')}
+    </div>
+
+    <div class="stats-grid" style="grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3)">
+      <div class="stat-card">
+        <div class="stat-value">${stats.avgPerWeek}</div>
+        <div class="stat-label">Sesiones / semana</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${periodSessions.length}</div>
+        <div class="stat-label">En el período</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.currentStreak}</div>
+        <div class="stat-label">Racha actual (días)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.maxStreak}</div>
+        <div class="stat-label">Racha máxima (días)</div>
+      </div>
+    </div>
+
+    ${stats.topDays.length ? `
+      <div class="chart-card" style="margin-bottom:var(--space-3)">
+        <div class="chart-title" style="margin-bottom:var(--space-2)">Días más frecuentes</div>
+        <p style="font-size:var(--text-base);color:var(--text-secondary);margin:0">
+          Entrenás más los <strong style="color:var(--accent-primary)">${stats.topDays.join(' y ')}</strong>
+        </p>
+      </div>
+    ` : ''}
+
+    <div class="chart-card">
+      <div class="chart-title" style="margin-bottom:var(--space-4)">Distribución por día</div>
+      ${_weekdayDistHTML(periodSessions)}
+    </div>
+  `;
+}
+
+function _weekdayDistHTML(sessions) {
+  const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const counts     = [0, 0, 0, 0, 0, 0, 0];
+  sessions.forEach(s => {
+    const [y, m, d] = s.date.split('-').map(Number);
+    counts[new Date(y, m - 1, d).getDay()]++;
+  });
+  const maxC = Math.max(...counts, 1);
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:var(--space-2);height:72px;align-items:end">
+      ${counts.map((c, i) => `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end">
+          <span style="font-size:9px;color:var(--text-tertiary);font-variant-numeric:tabular-nums;min-height:12px">${c || ''}</span>
+          <div style="width:100%;background:var(--accent-primary);border-radius:3px 3px 0 0;height:${Math.max((c / maxC) * 100, c > 0 ? 8 : 0)}%;opacity:${c > 0 ? 0.85 : 0.12}"></div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:var(--space-2);margin-top:var(--space-2)">
+      ${DAY_LABELS.map(l => `
+        <span style="text-align:center;font-size:var(--text-xs);color:var(--text-tertiary)">${l}</span>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── Charts ─────────────────────────────────────────────────
+
+function _renderCharts() {
+  if (_activeTab === 'ejercicio') _renderExerciseChart();
+  if (_activeTab === 'grupos')    _renderGroupChart();
+}
+
+function _renderExerciseChart() {
   if (!_selectedEx) return;
-
   const canvas = document.getElementById('progress-chart');
   if (!canvas) return;
 
   const history = getExerciseHistory(_selectedEx);
   if (!history.length) return;
 
-  const labels = history.map(h => {
-    const [, m, d] = h.date.split('-');
-    return `${d}/${m}`;
-  });
-  const weights = history.map(h => h.maxWeight);
-  const isDark  = document.documentElement.dataset.theme === 'dark';
+  const isDark    = document.documentElement.dataset.theme === 'dark';
+  const gridColor = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
+  const textColor = isDark ? '#606060' : '#999999';
 
-  const gridColor  = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
-  const textColor  = isDark ? '#606060' : '#999999';
-  const accentColor = isDark ? '#4ade80' : '#16a34a';
+  const isVolume  = _chartMetric === 'volume';
+  const color     = isVolume ? (isDark ? '#60a5fa' : '#2563eb') : (isDark ? '#4ade80' : '#16a34a');
+  const bgColor   = isVolume
+    ? (isDark ? 'rgba(96,165,250,.1)' : 'rgba(37,99,235,.1)')
+    : (isDark ? 'rgba(74,222,128,.1)' : 'rgba(22,163,74,.1)');
+
+  const labels = history.map(h => h.date.split('-').slice(1).reverse().join('/'));
+  const data   = isVolume ? history.map(h => h.totalVolume) : history.map(h => h.maxWeight);
 
   if (_chart) _chart.destroy();
-
   _chart = new Chart(canvas, {
     type: 'line',
     data: {
       labels,
       datasets: [{
-        label: 'Peso máximo (kg)',
-        data:  weights,
-        borderColor:     accentColor,
-        backgroundColor: isDark ? 'rgba(74,222,128,.1)' : 'rgba(22,163,74,.1)',
-        pointBackgroundColor: accentColor,
+        label:               isVolume ? 'Volumen (kg)' : 'Peso máximo (kg)',
+        data,
+        borderColor:         color,
+        backgroundColor:     bgColor,
+        pointBackgroundColor: color,
         pointBorderColor:    'transparent',
-        pointRadius:      4,
-        pointHoverRadius: 6,
-        fill:  true,
-        tension: 0.3,
-        borderWidth: 2,
+        pointRadius:         4,
+        pointHoverRadius:    6,
+        fill:                true,
+        tension:             0.3,
+        borderWidth:         2,
       }],
     },
     options: {
@@ -211,7 +414,9 @@ function _renderChart() {
           bodyColor:       isDark ? '#9a9a9a' : '#555555',
           padding:         10,
           callbacks: {
-            label: ctx => ` ${ctx.parsed.y} kg`,
+            label: ctx => isVolume
+              ? ` ${ctx.parsed.y.toLocaleString('es-AR')} kg vol.`
+              : ` ${ctx.parsed.y} kg`,
           },
         },
       },
@@ -221,8 +426,14 @@ function _renderChart() {
           ticks: { color: textColor, font: { size: 11 } },
         },
         y: {
-          grid:  { color: gridColor },
-          ticks: { color: textColor, font: { size: 11 }, callback: v => `${v} kg` },
+          grid:        { color: gridColor },
+          ticks:       {
+            color: textColor,
+            font:  { size: 11 },
+            callback: v => isVolume
+              ? (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`)
+              : `${v} kg`,
+          },
           beginAtZero: false,
         },
       },
@@ -230,36 +441,121 @@ function _renderChart() {
   });
 }
 
+function _renderGroupChart() {
+  const canvas = document.getElementById('group-chart');
+  if (!canvas) return;
+
+  const sessions = _filterSessionsByPeriod(getSessions(), _groupPeriod);
+  const counts   = _getMuscleGroupCounts(sessions);
+
+  const isDark    = document.documentElement.dataset.theme === 'dark';
+  const gridColor = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
+  const textColor = isDark ? '#606060' : '#999999';
+
+  const labels = MUSCLE_GROUPS.map(g => g.shortName);
+  const data   = MUSCLE_GROUPS.map(g => counts[g.id] || 0);
+  const colors = MUSCLE_GROUPS.map(g => GROUP_COLORS[g.id] ?? '#888');
+
+  if (_groupChart) _groupChart.destroy();
+  _groupChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.map(c => c + 'bb'),
+        borderColor:     colors,
+        borderWidth:     1.5,
+        borderRadius:    5,
+      }],
+    },
+    options: {
+      responsive:          true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: isDark ? '#242424' : '#ffffff',
+          borderColor:     isDark ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.1)',
+          borderWidth:     1,
+          titleColor:      isDark ? '#f2f2f2' : '#111111',
+          bodyColor:       isDark ? '#9a9a9a' : '#555555',
+          padding:         10,
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.y} sesión${ctx.parsed.y !== 1 ? 'es' : ''}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid:  { color: gridColor },
+          ticks: { color: textColor, font: { size: 11 } },
+        },
+        y: {
+          grid:        { color: gridColor },
+          ticks:       { color: textColor, font: { size: 11 }, precision: 0 },
+          beginAtZero: true,
+        },
+      },
+    },
+  });
+}
+
+function _destroyCharts() {
+  if (_chart)      { _chart.destroy();      _chart = null; }
+  if (_groupChart) { _groupChart.destroy(); _groupChart = null; }
+}
+
 // ── Events ─────────────────────────────────────────────────
 
-function _bindEvents(exercises) {
-  const chips = _container.querySelector('#exercise-chips');
-  const search = _container.querySelector('#progress-search');
+function _bindEvents() {
+  _clickHandler = e => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) { _activeTab = tab.dataset.tab; _render(); return; }
 
-  chips?.addEventListener('click', e => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    _selectedEx = chip.dataset.exerciseId;
-    _render();
-  });
+    const exChip = e.target.closest('[data-exercise-id]');
+    if (exChip) { _selectedEx = exChip.dataset.exerciseId; _render(); return; }
 
-  search?.addEventListener('input', e => {
-    const q = e.target.value.toLowerCase();
-    _container.querySelectorAll('.chip').forEach(chip => {
-      chip.style.display = chip.textContent.toLowerCase().includes(q) ? '' : 'none';
-    });
-  });
+    const metricBtn = e.target.closest('[data-metric]');
+    if (metricBtn) { _chartMetric = metricBtn.dataset.metric; _render(); return; }
+
+    const gpBtn = e.target.closest('[data-group-period]');
+    if (gpBtn) { _groupPeriod = gpBtn.dataset.groupPeriod; _render(); return; }
+
+    const spBtn = e.target.closest('[data-stats-period]');
+    if (spBtn) { _statsPeriod = spBtn.dataset.statsPeriod; _render(); return; }
+  };
+
+  _inputHandler = e => {
+    if (e.target.id === 'progress-search') {
+      const q = e.target.value.toLowerCase();
+      _container.querySelectorAll('[data-exercise-id]').forEach(chip => {
+        chip.style.display = chip.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    }
+  };
+
+  _container.addEventListener('click', _clickHandler);
+  _container.addEventListener('input', _inputHandler);
 }
 
 // ── Utils ──────────────────────────────────────────────────
 
+function _noDataHTML() {
+  return `
+    <div class="empty-state">
+      <i data-lucide="bar-chart-3" style="width:48px;height:48px;color:var(--text-tertiary)"></i>
+      <h3>Sin datos todavía</h3>
+      <p>Registrá al menos una sesión para ver tu evolución aquí.</p>
+    </div>
+  `;
+}
+
 function _getExercisesWithHistory() {
   const sessions = getSessions();
   const custom   = getCustomExercises();
+  const byId     = new Map();
 
-  // Derivar la lista directamente desde las sesiones: incluye ejercicios
-  // predefinidos, externos y custom sin depender de la biblioteca local.
-  const byId = new Map();
   sessions.forEach(s => {
     s.exercises.forEach(ex => {
       if (ex.sets.some(set => set.weight > 0) && !byId.has(ex.exerciseId)) {
@@ -279,4 +575,121 @@ function _getExercisesWithHistory() {
 function _getDefaultExercise() {
   const withData = _getExercisesWithHistory();
   return withData.length ? withData[0].id : null;
+}
+
+function _filterSessionsByPeriod(sessions, period) {
+  if (period === 'all') return sessions;
+  const days    = { '1w': 7, '1m': 30, '3m': 90 }[period] ?? 30;
+  const cutoff  = new Date();
+  cutoff.setDate(cutoff.getDate() - days + 1);
+  const cutoffISO = _dateToISO(cutoff);
+  return sessions.filter(s => s.date >= cutoffISO);
+}
+
+function _getMuscleGroupCounts(sessions) {
+  const counts = {};
+  MUSCLE_GROUPS.forEach(g => { counts[g.id] = 0; });
+
+  sessions.forEach(s => {
+    const groupIds = [...new Set(
+      s.exercises.map(ex => ex.muscleGroup).filter(g => g && g !== 'general'),
+    )];
+    groupIds.forEach(gId => { if (counts[gId] !== undefined) counts[gId]++; });
+  });
+
+  return counts;
+}
+
+function _periodLabel(period) {
+  return {
+    '1w':  'Última semana',
+    '1m':  'Último mes',
+    '3m':  'Últimos 3 meses',
+    'all': 'Todo el tiempo',
+  }[period] ?? '';
+}
+
+function _calcStats(periodSessions, allSessions) {
+  // Promedio sesiones/semana en el período
+  const days = { '1w': 7, '1m': 30, '3m': 90, 'all': null }[_statsPeriod];
+  let avgPerWeek;
+  if (days) {
+    avgPerWeek = (periodSessions.length / (days / 7)).toFixed(1);
+  } else {
+    const span = _weekSpan(allSessions);
+    avgPerWeek = span > 0 ? (allSessions.length / span).toFixed(1) : allSessions.length.toFixed(1);
+  }
+
+  // Días más frecuentes
+  const dayCount = [0, 0, 0, 0, 0, 0, 0];
+  periodSessions.forEach(s => {
+    const [y, m, d] = s.date.split('-').map(Number);
+    dayCount[new Date(y, m - 1, d).getDay()]++;
+  });
+  const DAY_NAMES = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
+  const maxCount  = Math.max(...dayCount);
+  const topDays   = maxCount > 0
+    ? dayCount
+        .map((c, i) => ({ c, name: DAY_NAMES[i] }))
+        .filter(d => d.c === maxCount)
+        .map(d => d.name)
+    : [];
+
+  // Rachas (siempre sobre todos los datos históricos)
+  const currentStreak = _calcCurrentStreak(allSessions);
+  const maxStreak     = _calcMaxStreak(allSessions);
+
+  return { avgPerWeek, topDays, currentStreak, maxStreak };
+}
+
+function _weekSpan(sessions) {
+  if (!sessions.length) return 0;
+  const dates = sessions.map(s => s.date).sort();
+  const first = new Date(dates[0] + 'T00:00:00');
+  const last  = new Date(dates[dates.length - 1] + 'T00:00:00');
+  return Math.max(1, Math.round((last - first) / (7 * 86400000)) + 1);
+}
+
+function _calcCurrentStreak(sessions) {
+  const datesSet = new Set(sessions.map(s => s.date));
+  const today    = todayISO();
+  let streak = 0;
+  const d = new Date();
+
+  // Si hoy no tiene sesión, empezar desde ayer
+  if (!datesSet.has(today)) d.setDate(d.getDate() - 1);
+
+  while (true) {
+    const iso = _dateToISO(d);
+    if (datesSet.has(iso)) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function _calcMaxStreak(sessions) {
+  if (!sessions.length) return 0;
+  const dates = [...new Set(sessions.map(s => s.date))].sort();
+  let maxStreak = 1, current = 1;
+
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(dates[i - 1] + 'T00:00:00');
+    const curr = new Date(dates[i] + 'T00:00:00');
+    const diff = Math.round((curr - prev) / 86400000);
+    if (diff === 1) {
+      current++;
+      if (current > maxStreak) maxStreak = current;
+    } else {
+      current = 1;
+    }
+  }
+  return maxStreak;
+}
+
+function _dateToISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
