@@ -15,7 +15,7 @@
 import {
   getTodaySession, createSession, saveSession, getCustomExercises,
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
-  getSettings, saveSettings, getLastExerciseSession,
+  getSettings, saveSettings, getLastExerciseSession, checkAndUpdatePRs,
 } from '../store.js';
 import {
   MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
@@ -595,9 +595,22 @@ function _finishSession() {
   if (notesEl) _session.notes = notesEl.value;
   saveSession(_session);
   _stopRestTimer();
-  showToast('Sesión guardada correctamente.', 'success');
+
+  // Detectar nuevos PRs y celebrar
+  const newPRs = checkAndUpdatePRs(_session);
+  if (newPRs.length) {
+    newPRs.forEach((pr, i) => {
+      setTimeout(() => {
+        showToast(`🏆 Nuevo PR: ${pr.name} — ${pr.weight} kg`, 'success', 4500);
+      }, i * 600);
+    });
+    setTimeout(() => { window.location.hash = '#/history'; }, 400 + newPRs.length * 600);
+  } else {
+    showToast('Sesión guardada correctamente.', 'success');
+    setTimeout(() => { window.location.hash = '#/history'; }, 400);
+  }
+
   if (_timerInterval) clearInterval(_timerInterval);
-  setTimeout(() => { window.location.hash = '#/history'; }, 400);
 }
 
 function _cancelSession() {
