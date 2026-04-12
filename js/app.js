@@ -8,6 +8,7 @@ import { TodayView }     from './views/today.js';
 import { HistoryView }   from './views/history.js';
 import { ProgressView }  from './views/progress.js';
 import { ExercisesView } from './views/exercises.js';
+import { SettingsView }  from './views/settings.js';
 import { getSettings, saveSettings } from './store.js';
 
 // ── Init ───────────────────────────────────────────────────
@@ -21,7 +22,8 @@ function init() {
     .register('today',     TodayView)
     .register('history',   HistoryView)
     .register('progress',  ProgressView)
-    .register('exercises', ExercisesView);
+    .register('exercises', ExercisesView)
+    .register('settings',  SettingsView);
 
   // 3. Iniciar router (renderiza la vista actual)
   const container = document.getElementById('view-container');

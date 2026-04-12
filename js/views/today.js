@@ -24,6 +24,7 @@ import { fetchExternalExercises, IMG_BASE_URL } from '../data/freeExerciseDb.js'
 import { ROUTINE_TEMPLATES } from '../data/routineTemplates.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
+import { shareSession } from '../utils/share.js';
 
 // ── Estado local ───────────────────────────────────────────
 
@@ -189,8 +190,11 @@ function _renderActiveSession() {
           placeholder="Cómo fue el entreno...">${_session.notes || ''}</textarea>
       </div>
 
-      <div style="margin-top:var(--space-5);display:flex;gap:var(--space-3)">
+      <div style="margin-top:var(--space-5);display:flex;gap:var(--space-3);align-items:center">
         <button class="btn btn-secondary" id="cancel-session-btn" style="flex:1">Cancelar</button>
+        <button class="icon-btn" id="share-session-btn" title="Compartir sesión" aria-label="Compartir sesión">
+          <i data-lucide="share-2"></i>
+        </button>
         <button class="btn btn-primary btn-lg" id="finish-session-btn" style="flex:2">
           <i data-lucide="check"></i>
           Finalizar sesión
@@ -508,6 +512,7 @@ function _bindActiveSessionEvents() {
   _container.querySelector('#add-exercise-btn').addEventListener('click', _openAddExerciseModal);
   _container.querySelector('#finish-session-btn').addEventListener('click', _finishSession);
   _container.querySelector('#cancel-session-btn').addEventListener('click', _cancelSession);
+  _container.querySelector('#share-session-btn').addEventListener('click', () => shareSession(_session));
   _container.querySelector('#session-notes')
     .addEventListener('input', e => { _session.notes = e.target.value; });
 
