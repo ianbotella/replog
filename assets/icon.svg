@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full background — fills the entire icon area for maskable compatibility -->
+  <rect width="512" height="512" fill="#0f0f0f"/>
+  <!-- Dumbbell — centered at (256,256), content within safe zone (51–461) -->
+  <!-- Left outer plate -->
+  <rect x="80" y="192" width="56" height="128" rx="28" fill="#4ade80"/>
+  <!-- Right outer plate -->
+  <rect x="376" y="192" width="56" height="128" rx="28" fill="#4ade80"/>
+  <!-- Left inner plate -->
+  <rect x="136" y="160" width="56" height="192" rx="28" fill="#4ade80"/>
+  <!-- Right inner plate -->
+  <rect x="320" y="160" width="56" height="192" rx="28" fill="#4ade80"/>
+  <!-- Bar -->
+  <rect x="192" y="224" width="128" height="64" rx="32" fill="#4ade80"/>
+</svg>

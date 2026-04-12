@@ -12,15 +12,31 @@ import {
 } from '../store.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
+import {
+  getInstallPrompt, isStandalone, triggerInstall,
+  onInstallPromptChange, offInstallPromptChange,
+} from '../pwa.js';
 
 let _container = null;
+
+// Callback para actualizar la sección de instalación cuando cambia el estado
+let _installChangeHandler = null;
 
 export const SettingsView = {
   render(container) {
     _container = container;
     _render();
+
+    // Suscribirse a cambios del install prompt para actualizar la sección
+    _installChangeHandler = () => _updateInstallSection();
+    onInstallPromptChange(_installChangeHandler);
   },
-  destroy() {},
+  destroy() {
+    if (_installChangeHandler) {
+      offInstallPromptChange(_installChangeHandler);
+      _installChangeHandler = null;
+    }
+  },
 };
 
 // ── Render ─────────────────────────────────────────────────
@@ -95,6 +111,9 @@ function _render() {
         </div>
       </div>
 
+      <!-- Instalar app -->
+      ${_installSectionHTML()}
+
       <p style="font-size:var(--text-xs);color:var(--text-tertiary);text-align:center;margin-top:var(--space-8)">
         Replog · Datos 100% locales · Sin cuenta
       </p>
@@ -112,6 +131,9 @@ function _bindEvents() {
   _container.querySelector('#export-csv-btn').addEventListener('click',  _exportCSV);
   _container.querySelector('#import-file-input').addEventListener('change', _handleImportFile);
   _container.querySelector('#clear-data-btn').addEventListener('click',  _confirmClearData);
+
+  const installBtn = _container.querySelector('#install-app-btn');
+  if (installBtn) installBtn.addEventListener('click', _handleInstall);
 }
 
 // ── Export ─────────────────────────────────────────────────
@@ -228,6 +250,75 @@ function _validateAndConfirmImport(data) {
 
   if (window.lucide) {
     window.lucide.createIcons({ nodes: [document.getElementById('modal-container')] });
+  }
+}
+
+// ── Install PWA ────────────────────────────────────────────
+
+function _installSectionHTML() {
+  // No mostrar si ya está instalada como standalone
+  if (isStandalone()) return '';
+
+  const prompt = getInstallPrompt();
+
+  return `
+    <div class="section-header" style="margin-top:var(--space-5)">
+      <span class="section-title">Instalar app</span>
+    </div>
+    <div class="settings-card install-section" id="install-section">
+      <div class="settings-item">
+        <div class="settings-item-info">
+          <div class="settings-item-title">Agregar a la pantalla de inicio</div>
+          <div class="settings-item-sub">Accedé a Replog como una app nativa, sin abrir el navegador.</div>
+        </div>
+        ${prompt
+          ? `<button class="btn btn-primary btn-sm" id="install-app-btn">
+               <i data-lucide="download"></i> Instalar
+             </button>`
+          : `<span class="install-unavailable">Usá el menú del navegador</span>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+/** Actualiza solo la sección de instalación cuando cambia el estado del prompt. */
+function _updateInstallSection() {
+  if (!_container) return;
+  const section = _container.querySelector('.install-section');
+  if (!section) return;
+
+  const prompt = getInstallPrompt();
+  const btn = section.querySelector('#install-app-btn');
+
+  if (prompt && !btn) {
+    // El prompt apareció después del render inicial — reemplazar texto por botón
+    const info = section.querySelector('.settings-item');
+    if (info) {
+      const span = info.querySelector('.install-unavailable');
+      if (span) {
+        const newBtn = document.createElement('button');
+        newBtn.className = 'btn btn-primary btn-sm';
+        newBtn.id = 'install-app-btn';
+        newBtn.innerHTML = '<i data-lucide="download"></i> Instalar';
+        newBtn.addEventListener('click', _handleInstall);
+        span.replaceWith(newBtn);
+        if (window.lucide) window.lucide.createIcons({ nodes: [newBtn] });
+      }
+    }
+  } else if (!prompt && btn) {
+    // Prompt consumido (instalado) — ocultar sección
+    const sectionWrapper = _container.querySelector('#install-section')?.closest('.settings-card');
+    const header = sectionWrapper?.previousElementSibling;
+    sectionWrapper?.remove();
+    if (header?.classList.contains('section-header')) header.remove();
+  }
+}
+
+async function _handleInstall() {
+  const accepted = await triggerInstall();
+  if (accepted) {
+    showToast('¡Replog instalada correctamente!', 'success');
   }
 }
 

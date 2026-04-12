@@ -1,0 +1,33 @@
+{
+  "name": "Replog",
+  "short_name": "Replog",
+  "description": "Registrá y analizá tus entrenamientos de gimnasio. Sin cuenta, sin servidor, 100% local.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f0f0f",
+  "theme_color": "#0f0f0f",
+  "lang": "es",
+  "categories": ["health", "fitness", "sports"],
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
