@@ -158,13 +158,13 @@
   font-weight: var(--weight-medium);
   box-shadow: var(--shadow-md);
   pointer-events: all;
-  animation: toast-in var(--transition-base) ease;
+  animation: toast-in 200ms ease;
 }
 .toast svg { width: 16px; height: 16px; flex-shrink: 0; }
 .toast-success { border-color: var(--accent-primary); color: var(--accent-primary); }
 .toast-danger  { border-color: var(--danger); color: var(--danger); }
 .toast-info    { color: var(--text-primary); }
-.toast.leaving { animation: toast-out var(--transition-base) ease forwards; }
+.toast.leaving { animation: toast-out 200ms ease forwards; }
 
 /* ── Modal sheets ────────────────────────────────────────── */
 .modal-header {

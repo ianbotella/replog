@@ -25,6 +25,6 @@ export function showToast(message, type = 'info', duration = 3000) {
 
   setTimeout(() => {
     toast.classList.add('leaving');
-    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    setTimeout(() => toast.remove(), 250); // duración de la animación toast-out
   }, duration);
 }
