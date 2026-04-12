@@ -15,6 +15,7 @@ import {
   MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
 } from '../data/exercises.js';
 import { fetchExternalExercises } from '../data/freeExerciseDb.js';
+import { ROUTINE_TEMPLATES } from '../data/routineTemplates.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
@@ -62,14 +63,77 @@ function _renderStartScreen() {
 
       ${_weekStripHTML(weekDays, completedDates)}
 
-      <button class="btn btn-primary btn-lg btn-full" id="start-free-btn">
-        <i data-lucide="play"></i>
-        Iniciar sesión
+      <!-- Rutinas predefinidas -->
+      <div class="section-header" style="margin-bottom:var(--space-3)">
+        <span class="section-title">Rutinas</span>
+      </div>
+      <div id="routine-templates-list" style="display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-5)">
+        ${ROUTINE_TEMPLATES.map(_routineTemplateCardHTML).join('')}
+      </div>
+
+      <!-- Sesión libre -->
+      <button class="btn btn-secondary btn-full" id="start-free-btn">
+        <i data-lucide="shuffle"></i>
+        Sesión libre
       </button>
     </div>
   `;
 
   _container.querySelector('#start-free-btn').addEventListener('click', _startFreeSession);
+  _container.querySelector('#routine-templates-list').addEventListener('click', async e => {
+    const card = e.target.closest('[data-template-id]');
+    if (!card) return;
+    const template = ROUTINE_TEMPLATES.find(t => t.id === card.dataset.templateId);
+    if (template) await _startFromTemplate(template);
+  });
+}
+
+// ── Template cards ─────────────────────────────────────────
+
+function _routineTemplateCardHTML(t) {
+  const group      = MUSCLE_GROUPS.find(g => g.id === t.muscleGroup);
+  const badgeClass = group?.badgeClass ?? 'badge-neutral';
+  return `
+    <div class="exercise-item" data-template-id="${t.id}" style="cursor:pointer">
+      <div class="exercise-item-info">
+        <div class="exercise-item-name">${t.name}</div>
+        <div class="exercise-item-meta">${t.description}</div>
+      </div>
+      <div class="exercise-item-actions">
+        <span class="badge ${badgeClass}" style="flex-shrink:0">${t.exercises.length} ejercicios</span>
+        <i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0"></i>
+      </div>
+    </div>
+  `;
+}
+
+async function _startFromTemplate(template) {
+  const external = await fetchExternalExercises();
+
+  _session = createSession();
+
+  for (const ex of template.exercises) {
+    const apiEx = external.find(e => e.id === ex.exerciseId);
+    const sessionEx = {
+      exerciseId:  ex.exerciseId,
+      name:        apiEx?.name ?? ex.displayName,
+      muscleGroup: apiEx?.muscleGroup ?? ex.muscleGroup,
+      tip:         ex.tip,
+      sets:        [],
+    };
+    if (apiEx?.type)   sessionEx.type   = apiEx.type;
+    if (apiEx?.metric) sessionEx.metric = apiEx.metric;
+
+    // Pre-populate sets con repsMin como punto de partida
+    for (let i = 0; i < ex.sets; i++) {
+      sessionEx.sets.push({ weight: 0, reps: ex.repsMin });
+    }
+
+    _session.exercises.push(sessionEx);
+  }
+
+  saveSession(_session);
+  _render();
 }
 
 // ── Sesión activa ─────────────────────────────────────────
@@ -148,9 +212,12 @@ function _exerciseBlockHTML(ex, idx) {
   return `
     <div class="exercise-block" data-ex-idx="${idx}" data-ex-type="${type}">
       <div class="exercise-block-header">
-        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-1)">
-          <span class="exercise-name">${ex.name}</span>
-          ${typeBadge}
+        <div>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-1)">
+            <span class="exercise-name">${ex.name}</span>
+            ${typeBadge}
+          </div>
+          ${ex.tip ? `<div style="font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">${ex.tip}</div>` : ''}
         </div>
         <button class="icon-btn delete-exercise-btn" data-ex="${idx}" aria-label="Eliminar ejercicio">
           <i data-lucide="trash-2"></i>
