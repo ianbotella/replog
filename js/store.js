@@ -202,6 +202,60 @@ export function getLastExerciseSession(exerciseId) {
   return null;
 }
 
+// ── Backup: Export / Import ────────────────────────────────
+
+const BACKUP_VERSION = 1;
+
+/**
+ * Devuelve un objeto con todos los datos del usuario listo para serializar.
+ */
+export function exportAllData() {
+  return {
+    version:    BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    sessions:   read(KEYS.SESSIONS,  []),
+    exercises:  read(KEYS.EXERCISES, []),
+    settings:   read(KEYS.SETTINGS,  {}),
+    prs:        read(KEYS.PRS,       {}),
+  };
+}
+
+/**
+ * Valida e importa un backup. Lanza Error si la estructura es inválida.
+ * @param {object} data
+ */
+export function importAllData(data) {
+  if (!data || typeof data !== 'object') throw new Error('Archivo inválido.');
+  if (!Array.isArray(data.sessions))     throw new Error('El archivo no contiene sesiones válidas.');
+
+  write(KEYS.SESSIONS,  data.sessions  ?? []);
+  write(KEYS.EXERCISES, data.exercises ?? []);
+  write(KEYS.SETTINGS,  data.settings  ?? {});
+  write(KEYS.PRS,       data.prs       ?? {});
+}
+
+/**
+ * Genera un string CSV con el historial de sesiones (sin series detalladas).
+ * @returns {string}
+ */
+export function exportSessionsCSV() {
+  const sessions = read(KEYS.SESSIONS, []);
+  const header   = 'fecha,grupo_muscular,duracion_min,ejercicios,series,volumen_kg,notas';
+
+  const rows = sessions
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map(s => {
+      const exCount  = s.exercises.length;
+      const setCount = s.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
+      const vol      = s.exercises.reduce((t, ex) =>
+        t + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0);
+      const notes    = (s.notes || '').replace(/"/g, '""');
+      return `${s.date},${s.muscleGroup ?? ''},${s.durationMin ?? 0},${exCount},${setCount},${vol},"${notes}"`;
+    });
+
+  return [header, ...rows].join('\n');
+}
+
 // ── Personal Records (PRs) ─────────────────────────────────
 
 /**

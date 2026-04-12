@@ -8,6 +8,7 @@ import {
 } from '../store.js';
 import { getSessionGroupDisplay } from '../data/exercises.js';
 import { showToast } from '../components/toast.js';
+import { shareSession } from '../utils/share.js';
 
 let _container = null;
 
@@ -98,6 +99,9 @@ function _sessionCardHTML(session) {
           <div class="history-date" style="margin-top:var(--space-1)">${dateLabel}</div>
         </div>
         <div style="display:flex;align-items:center;gap:var(--space-2)">
+          <button class="icon-btn share-session-btn" data-id="${session.id}" aria-label="Compartir sesión">
+            <i data-lucide="share-2" style="width:15px;height:15px"></i>
+          </button>
           <button class="icon-btn delete-session-btn" data-id="${session.id}" aria-label="Eliminar sesión">
             <i data-lucide="trash-2" style="width:15px;height:15px"></i>
           </button>
@@ -138,6 +142,15 @@ function _bindEvents() {
   _container.addEventListener('click', e => {
     const card = e.target.closest('.history-card');
     if (!card) return;
+
+    // Si click en botón compartir, no expandir
+    if (e.target.closest('.share-session-btn')) {
+      e.stopPropagation();
+      const id      = e.target.closest('.share-session-btn').dataset.id;
+      const session = getSessionsSorted().find(s => s.id === id);
+      if (session) shareSession(session);
+      return;
+    }
 
     // Si click en botón eliminar, no expandir
     if (e.target.closest('.delete-session-btn')) {

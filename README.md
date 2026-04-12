@@ -15,6 +15,7 @@
 - **Supersets / Circuitos**: agrupá ejercicios visualmente; el timer solo dispara al terminar el último del grupo
 - **RPE / RIR opcional por serie**: toggle por ejercicio para registrar esfuerzo percibido o repeticiones en reserva
 - **Referencia de última sesión** inline por ejercicio ("Última: 3 × 10 @ 60 kg") para saber exactamente cuánto levantaste la vez anterior
+- **Compartir sesión** desde el footer de la sesión activa (ver más abajo)
 - Notas libres y duración automática al finalizar
 
 ### Historial
@@ -22,6 +23,7 @@
 - Cada tarjeta muestra grupo muscular, volumen total, duración y resumen por ejercicio
 - Badge **🏆 PR** en los ejercicios donde se estableció un récord personal
 - Valores de RPE / RIR registrados visibles en el resumen de series
+- Botón **Compartir** en cada tarjeta para enviar el resumen de la sesión
 - Eliminar sesiones individualmente
 
 ### Progreso — 4 vistas analíticas
@@ -55,15 +57,75 @@
 - Creá y eliminá ejercicios custom persistidos en localStorage
 - Soporte para tipos: Fuerza, Cardio, Movilidad, Estiramiento
 
+### Configuración — Datos y backup
+- **Exportar JSON**: backup completo y reimportable (sesiones, ejercicios, PRs, config)
+- **Exportar CSV**: solo el historial de sesiones, para analizar en Excel o Sheets
+- **Importar**: restaurar un backup JSON con validación previa y confirmación
+- **Borrar datos**: limpiar todo el historial desde la zona de peligro
+
 ---
 
-## Déteccion de récords personales
+## Detección de récords personales
 
 Al finalizar cada sesión, Replog compara automáticamente los pesos registrados contra los PRs almacenados. Si se supera un récord, se muestra un toast de celebración por cada ejercicio:
 
 > 🏆 Nuevo PR: Press de Banca — 85 kg
 
 Los PRs se actualizan en localStorage y aparecen marcados en el historial.
+
+---
+
+## Compartir una sesión
+
+Desde cualquier tarjeta del historial (botón `share-2`) o desde el footer de la sesión activa, Replog genera un resumen en texto plano con este formato:
+
+```
+🏋️ Replog — Lunes 12 de abril
+
+Grupo: Pecho + Tríceps
+Duración: 48 min
+Ejercicios: 4 | Series: 14 | Volumen: 5.200 kg
+
+Press de Banca
+  Serie 1: 80 kg × 10
+  Serie 2: 80 kg × 8
+  Serie 3: 75 kg × 6
+
+Fondos en Paralelas
+  Serie 1: 60 kg × 12
+
+💪 Generado con Replog
+```
+
+- En **mobile** se abre el sheet nativo del sistema (`navigator.share`)
+- En **desktop** el texto se copia automáticamente al portapapeles
+
+---
+
+## Datos y privacidad
+
+**Todos los datos son 100% locales.** Replog no tiene servidor, no requiere cuenta y nunca envía información a internet.
+
+### Exportar un backup
+
+1. Ir a **Config.** en la barra de navegación inferior
+2. Tocar **Exportar JSON** para descargar `replog-backup-YYYY-MM-DD.json`
+3. Guardar el archivo en un lugar seguro (Drive, iCloud, pendrive)
+
+El JSON incluye todas las sesiones, ejercicios custom, PRs y configuración.
+
+### Restaurar un backup
+
+1. Ir a **Config.** → **Elegir archivo**
+2. Seleccionar el archivo `.json` exportado desde Replog
+3. Revisar el resumen (cantidad de sesiones, ejercicios y PRs) en el modal de confirmación
+4. Confirmar — la app se recargará con los datos restaurados
+
+> **Atención:** la importación reemplaza todos los datos actuales. Exportá un backup antes si querés conservar los datos existentes.
+
+### Exportar CSV para análisis
+
+El CSV incluye una fila por sesión con: fecha, grupo muscular, duración, cantidad de ejercicios, series, volumen total y notas. Es compatible con Excel, Google Sheets y cualquier herramienta de análisis de datos.
 
 ---
 
@@ -75,7 +137,7 @@ Los PRs se actualizan en localStorage y aparecen marcados en el historial.
 | Gráficos | [Chart.js 4](https://www.chartjs.org/) vía CDN |
 | Iconos | [Lucide Icons](https://lucide.dev/) vía CDN |
 | Almacenamiento | `localStorage` (sin servidor, sin cuenta) |
-| Navegación | SPA con hash router (`#/today`, `#/history`, `#/progress`, `#/exercises`) |
+| Navegación | SPA con hash router (`#/today`, `#/history`, `#/progress`, `#/exercises`, `#/settings`) |
 | Estilos | CSS puro con custom properties (design tokens) |
 | Deploy | GitHub Pages (rama main, raíz) |
 
@@ -97,16 +159,19 @@ replog/
 └── js/
     ├── app.js             # Entry point, router init, tema
     ├── router.js          # Hash router
-    ├── store.js           # CRUD de localStorage + utils de fecha + PRs
+    ├── store.js           # CRUD localStorage + backup + PRs + date utils
     ├── data/
-    │   ├── exercises.js       # Definición de grupos musculares
-    │   ├── freeExerciseDb.js  # Biblioteca de ejercicios externos
+    │   ├── exercises.js        # Definición de grupos musculares
+    │   ├── freeExerciseDb.js   # Biblioteca de ejercicios externos
     │   └── routineTemplates.js
     ├── views/
-    │   ├── today.js       # Sesión activa (timer, supersets, RPE, last ref)
-    │   ├── history.js     # Historial de sesiones
+    │   ├── today.js       # Sesión activa (timer, supersets, RPE, last ref, share)
+    │   ├── history.js     # Historial de sesiones (share, PR badge)
     │   ├── progress.js    # Análisis: ejercicio, grupos, PRs, estadísticas
-    │   └── exercises.js   # Biblioteca de ejercicios
+    │   ├── exercises.js   # Biblioteca de ejercicios
+    │   └── settings.js    # Exportar / importar / borrar datos
+    ├── utils/
+    │   └── share.js       # Web Share API + clipboard fallback
     └── components/
         ├── modal.js       # Bottom sheet
         └── toast.js       # Notificaciones
@@ -152,7 +217,7 @@ Al no requerir backend, Replog funciona sin conexión a internet una vez cargado
 
 ## Capturas
 
-> *La app cuenta con tema oscuro y claro, bottom navigation, tarjetas de sesión expandibles, gráficos de línea y barras, overlay de temporizador de descanso y lista de récords personales.*
+> *La app cuenta con tema oscuro y claro, bottom navigation con 5 tabs, tarjetas de sesión expandibles, gráficos de línea y barras, overlay de temporizador de descanso, lista de récords personales y pantalla de configuración con backup.*
 
 ---
 
