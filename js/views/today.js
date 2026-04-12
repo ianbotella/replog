@@ -459,14 +459,22 @@ async function _openAddExerciseModal() {
   const external = await fetchExternalExercises();
   const all      = [...custom, ...external];
 
-  // Secciones del filtro
+  // Chips de categoría por músculo específico (igual que la vista Ejercicios)
+  const CAT_ORDER = [
+    'Pecho', 'Tríceps', 'Espalda', 'Bíceps', 'Hombros', 'Piernas',
+    'Abdominales', 'Antebrazos', 'Cuello',
+  ];
+  const strengthAll = all.filter(e => e.type !== 'cardio' && e.type !== 'stretch' && e.type !== 'mobility');
+  const availCats   = new Set(strengthAll.map(e => e.category));
+  const orderedCats = [
+    ...CAT_ORDER.filter(c => availCats.has(c)),
+    ...[...availCats].filter(c => !CAT_ORDER.includes(c)).sort(),
+  ];
   const filterSections = [
-    { id: 'all',            label: 'Todos' },
-    { id: 'chest-triceps',  label: 'Pecho + Tríceps' },
-    { id: 'back-biceps',    label: 'Espalda + Bíceps' },
-    { id: 'shoulders-legs', label: 'Hombros + Piernas' },
-    { id: 'cardio',         label: '🔥 Cardio' },
-    { id: 'stretch',        label: '🧘 Estiramiento' },
+    { id: 'all',    label: 'Todos' },
+    ...orderedCats.map(cat => ({ id: cat, label: cat })),
+    { id: 'cardio',  label: 'Cardio' },
+    { id: 'stretch', label: 'Estiramiento' },
   ];
 
   let currentFilter = 'all';
@@ -476,7 +484,7 @@ async function _openAddExerciseModal() {
     let list = all;
     if      (currentFilter === 'cardio')  list = all.filter(e => e.type === 'cardio' || e.type === 'mobility');
     else if (currentFilter === 'stretch') list = all.filter(e => e.type === 'stretch');
-    else if (currentFilter !== 'all')     list = all.filter(e => e.muscleGroup === currentFilter);
+    else if (currentFilter !== 'all')     list = all.filter(e => e.category === currentFilter);
     if (currentSearch) list = list.filter(e => e.name.toLowerCase().includes(currentSearch.toLowerCase()));
     return list;
   };
