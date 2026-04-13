@@ -88,8 +88,8 @@ function uid() {
  */
 export function calcSetsVolume(sets = []) {
   return sets
-    .filter(s => s.weight > 0 && s.reps > 0)
-    .reduce((acc, s) => acc + s.weight * s.reps, 0);
+    .filter(s => resolveWeightKg(s) > 0 && s.reps > 0)
+    .reduce((acc, s) => acc + resolveWeightKg(s) * s.reps, 0);
 }
 
 /**
@@ -113,7 +113,18 @@ export function calcTotalVolume(sessions = []) {
 // ── Settings ───────────────────────────────────────────────
 
 export function getSettings() {
-  return read(KEYS.SETTINGS, { theme: 'dark', restTimerDuration: 90 });
+  return read(KEYS.SETTINGS, { theme: 'dark', restTimerDuration: 90, weightUnit: 'kg' });
+}
+
+/**
+ * Devuelve el peso en kg de un set, con retrocompatibilidad para sets históricos.
+ * @param {object} set
+ * @returns {number}
+ */
+export function resolveWeightKg(set) {
+  if (set.weightKg !== undefined) return set.weightKg;
+  if (set.weightUnit === 'lb')    return set.weight / 2.2046;
+  return set.weight ?? 0;
 }
 
 export function saveSettings(partial) {
@@ -197,10 +208,10 @@ export function getExerciseHistory(exerciseId) {
     const ex = session.exercises.find(e => e.exerciseId === exerciseId);
     if (!ex || ex.sets.length === 0) continue;
 
-    const validSets = ex.sets.filter(s => s.weight > 0 && s.reps > 0);
+    const validSets = ex.sets.filter(s => resolveWeightKg(s) > 0 && s.reps > 0);
     if (validSets.length === 0) continue;
 
-    const maxWeight    = Math.max(...validSets.map(s => s.weight));
+    const maxWeight    = Math.max(...validSets.map(s => resolveWeightKg(s)));
     const totalVolume  = calcSetsVolume(validSets);
     const totalReps    = validSets.reduce((sum, s) => sum + s.reps, 0);
 
@@ -347,11 +358,12 @@ export function getBestOneRM(exerciseId) {
     const ex = session.exercises.find(e => e.exerciseId === exerciseId);
     if (!ex) continue;
     for (const set of ex.sets) {
-      if (set.weight > 0 && set.reps > 0) {
-        const rm = set.weight * (1 + set.reps / 30);
+      const wKg = resolveWeightKg(set);
+      if (wKg > 0 && set.reps > 0) {
+        const rm = wKg * (1 + set.reps / 30);
         if (rm > bestRM) {
           bestRM  = rm;
-          bestSet = { weight: set.weight, reps: set.reps, rm: Math.round(rm) };
+          bestSet = { weight: wKg, reps: set.reps, rm: Math.round(rm) };
         }
       }
     }
@@ -600,10 +612,10 @@ export function checkAndUpdatePRs(session) {
   const newPRs = [];
 
   for (const ex of session.exercises) {
-    const validSets = ex.sets.filter(s => s.weight > 0 && s.reps > 0);
+    const validSets = ex.sets.filter(s => resolveWeightKg(s) > 0 && s.reps > 0);
     if (!validSets.length) continue;
 
-    const maxWeight = Math.max(...validSets.map(s => s.weight));
+    const maxWeight = Math.max(...validSets.map(s => resolveWeightKg(s)));
     const current   = prs[ex.exerciseId];
 
     if (!current || maxWeight > current.weight) {
