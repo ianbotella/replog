@@ -5,7 +5,7 @@
  * Bump CACHE_NAME para forzar refresco en cada deploy.
  */
 
-const CACHE_NAME = 'replog-v1';
+const CACHE_NAME = 'replog-v2';
 
 const CACHE_FILES = [
   // Shell
