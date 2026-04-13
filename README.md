@@ -303,6 +303,7 @@ Los colores de grupos musculares son consistentes en toda la app:
 1. Pusheá la rama `main` al repositorio
 2. Ir a **Settings → Pages → Branch: main / (root)**
 3. La app queda disponible en `https://<usuario>.github.io/replog`
+4. **Incrementar `CACHE_NAME` en `sw.js`** en cada deploy (`replog-v2` → `replog-v3` → ...) para invalidar la caché vieja y activar la actualización automática en todos los dispositivos
 
 No requiere CI, build step ni variables de entorno.
 
@@ -312,7 +313,17 @@ No requiere CI, build step ni variables de entorno.
 
 Replog incluye un **Service Worker** con estrategia Cache First. En la primera carga, todos los assets se pre-cachean — incluyendo los scripts de Chart.js y Lucide desde CDN. A partir de entonces, la app funciona **completamente sin conexión**: no se necesita internet para registrar sesiones, ver el historial ni consultar el progreso.
 
-Para forzar una actualización tras un nuevo deploy, basta con incrementar `CACHE_NAME` en `sw.js` (ej: `replog-v1` → `replog-v2`).
+### Actualizaciones automáticas
+
+Al detectar una nueva versión (nuevo `CACHE_NAME` en `sw.js`), el flujo es completamente automático:
+
+1. El SW nuevo se instala en segundo plano
+2. Se activa inmediatamente gracias a `skipWaiting()` — sin necesidad de cerrar pestañas
+3. Toma control de la página con `clients.claim()`
+4. La app muestra un **toast "Nueva versión disponible 🎉"** con un botón **Actualizar**
+5. Al hacer clic, se recarga la página ya con los archivos nuevos
+
+No es necesario limpiar la caché del navegador ni hacer hard refresh manualmente.
 
 ---
 

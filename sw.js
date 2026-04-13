@@ -1,11 +1,20 @@
-/**
- * sw.js — Service Worker de Replog
- *
- * Estrategia: Cache First para todos los assets estáticos y CDN.
- * Bump CACHE_NAME para forzar refresco en cada deploy.
- */
+// ─────────────────────────────────────────────────────────────
+// REPLOG — SERVICE WORKER
+//
+// Estrategia: Cache First para todos los assets estáticos y CDN.
+//
+// DEPLOY: al publicar una nueva versión, incrementar CACHE_NAME:
+//   'replog-v2' → 'replog-v3' → 'replog-v4' ...
+// Esto invalida la caché vieja y activa el flujo de actualización
+// automática: el SW nuevo se instala, se activa con skipWaiting(),
+// toma control con clients.claim() y notifica a la página vía
+// postMessage para mostrar el toast "Nueva versión disponible".
+// ─────────────────────────────────────────────────────────────
 
 const CACHE_NAME = 'replog-v2';
+
+// Flag: true si había un SW activo antes → es una actualización, no la primera instalación.
+let _isUpdate = false;
 
 const CACHE_FILES = [
   // Shell
@@ -54,6 +63,9 @@ const CACHE_FILES = [
 
 // ── Install: pre-cachear todos los assets ─────────────────
 self.addEventListener('install', event => {
+  // Si ya hay un SW activo, esto es una actualización (no primera instalación)
+  _isUpdate = !!self.registration.active;
+
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(CACHE_FILES)),
   );
@@ -64,16 +76,19 @@ self.addEventListener('install', event => {
 // ── Activate: limpiar cachés de versiones anteriores ──────
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(k => k !== CACHE_NAME)
-          .map(k => caches.delete(k)),
-      ),
-    ),
+    caches.keys()
+      .then(keys =>
+        Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))),
+      )
+      .then(() => self.clients.claim())
+      .then(() => {
+        // Notificar a todas las pestañas abiertas solo si es una actualización real
+        if (!_isUpdate) return;
+        return self.clients.matchAll({ type: 'window' }).then(clients => {
+          clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' }));
+        });
+      }),
   );
-  // Tomar control de todos los clientes abiertos sin recargar
-  self.clients.claim();
 });
 
 // ── Fetch: Cache First con fallback a red ─────────────────
