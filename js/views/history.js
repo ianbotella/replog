@@ -5,6 +5,7 @@
 
 import {
   getSessionsSorted, deleteSession, formatDateDisplay, getCustomExercises, getPRs,
+  calcSessionVolume,
 } from '../store.js';
 import { getSessionGroupDisplay } from '../data/exercises.js';
 import { showToast } from '../components/toast.js';
@@ -65,7 +66,7 @@ function _sessionCardHTML(session) {
   const dateLabel = _capitalize(formatDateDisplay(session.date));
   const exCount   = session.exercises.length;
   const setCount  = session.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
-  const totalVol  = _calcVolume(session);
+  const totalVol  = calcSessionVolume(session);
   const dur       = session.durationMin ? `${session.durationMin} min` : '';
   const prs       = getPRs();
 
@@ -174,10 +175,6 @@ function _confirmDelete(id) {
 
 // ── Utils ──────────────────────────────────────────────────
 
-function _calcVolume(session) {
-  return session.exercises.reduce((total, ex) =>
-    total + ex.sets.reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0), 0);
-}
 
 function _bestSet(sets) {
   if (!sets || sets.length === 0) return null;
