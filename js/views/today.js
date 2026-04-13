@@ -16,6 +16,7 @@ import {
   getTodaySession, createSession, saveSession, getCustomExercises,
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
   getSettings, saveSettings, getLastExerciseSession, checkAndUpdatePRs,
+  getProfile, calcEstimatedCalories, checkAndUpdateAchievements,
 } from '../store.js';
 import {
   MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
@@ -594,28 +595,54 @@ function _finishSession() {
     showToast('Agregá al menos un ejercicio antes de finalizar.', 'danger');
     return;
   }
+
   const started = new Date(_session.startedAt);
   _session.durationMin = Math.round((Date.now() - started.getTime()) / 60000);
   const notesEl = _container.querySelector('#session-notes');
   if (notesEl) _session.notes = notesEl.value;
+
+  // Calorías estimadas (antes de guardar para persistirlas en el objeto)
+  const profile     = getProfile();
+  const lastWeight  = profile?.weightHistory?.slice(-1)[0]?.weightKg ?? null;
+  const calories    = calcEstimatedCalories(_session, lastWeight);
+  if (calories) _session.estimatedCalories = calories;
+
   saveSession(_session);
   _stopRestTimer();
+  if (_timerInterval) clearInterval(_timerInterval);
 
-  // Detectar nuevos PRs y celebrar
-  const newPRs = checkAndUpdatePRs(_session);
-  if (newPRs.length) {
-    newPRs.forEach((pr, i) => {
-      setTimeout(() => {
-        showToast(`🏆 Nuevo PR: ${pr.name} — ${pr.weight} kg`, 'success', 4500);
-      }, i * 600);
-    });
-    setTimeout(() => { window.location.hash = '#/history'; }, 400 + newPRs.length * 600);
-  } else {
-    showToast('Sesión guardada correctamente.', 'success');
+  // Toast inicial: sesión guardada + calorías
+  const calText = calories ? ` · ~${calories} kcal` : '';
+  showToast(`Sesión guardada${calText}.`, 'success');
+
+  // PRs y logros (ambos evaluados sobre el estado post-guardado)
+  const newPRs          = checkAndUpdatePRs(_session);
+  const newAchievements = checkAndUpdateAchievements();
+
+  if (!newPRs.length && !newAchievements.length) {
     setTimeout(() => { window.location.hash = '#/history'; }, 400);
+    return;
   }
 
-  if (_timerInterval) clearInterval(_timerInterval);
+  let offset = 400;
+
+  newPRs.forEach((pr, i) => {
+    setTimeout(
+      () => showToast(`🏆 Nuevo PR: ${pr.name} — ${pr.weight} kg`, 'success', 4500),
+      offset + i * 600,
+    );
+  });
+  offset += newPRs.length * 600;
+
+  newAchievements.forEach((ach, i) => {
+    setTimeout(
+      () => showToast(`🎖️ Logro desbloqueado: ${ach.name}`, 'success', 5000),
+      offset + i * 1500,
+    );
+  });
+  offset += newAchievements.length * 1500;
+
+  setTimeout(() => { window.location.hash = '#/history'; }, offset + 400);
 }
 
 function _cancelSession() {

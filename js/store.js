@@ -2,19 +2,30 @@
  * store.js — Capa de datos con localStorage
  *
  * Claves usadas:
- *   replog_sessions   → Session[]
- *   replog_exercises  → ExerciseLibraryItem[]  (solo custom)
- *   replog_settings   → { theme: 'dark'|'light' }
+ *   replog_sessions      → Session[]
+ *   replog_exercises     → ExerciseLibraryItem[]  (solo custom)
+ *   replog_settings      → { theme: 'dark'|'light' }
+ *   replog_prs           → { [exerciseId]: PREntry }
+ *   replog_profile       → ProfileData
+ *   replog_achievements  → AchievementEntry[]
  *
  * Tipos:
  *   Session = {
  *     id: string,
- *     date: string,           // ISO 8601 "YYYY-MM-DD"
+ *     date: string,               // ISO 8601 "YYYY-MM-DD"
  *     muscleGroup: string,
  *     exercises: SessionExercise[],
  *     durationMin: number,
  *     notes: string,
- *     startedAt: string       // ISO timestamp
+ *     startedAt: string,          // ISO timestamp
+ *     estimatedCalories: number   // opcional
+ *   }
+ *
+ *   ProfileData = {
+ *     gender: 'male'|'female'|'other',
+ *     birthYear: number,
+ *     heightCm: number,
+ *     weightHistory: [{ date: string, weightKg: number }]
  *   }
  *
  *   SessionExercise = {
@@ -35,11 +46,15 @@
  */
 
 const KEYS = {
-  SESSIONS:  'replog_sessions',
-  EXERCISES: 'replog_exercises',
-  SETTINGS:  'replog_settings',
-  PRS:       'replog_prs',
+  SESSIONS:      'replog_sessions',
+  EXERCISES:     'replog_exercises',
+  SETTINGS:      'replog_settings',
+  PRS:           'replog_prs',
+  PROFILE:       'replog_profile',
+  ACHIEVEMENTS:  'replog_achievements',
 };
+
+import { ACHIEVEMENT_DEFS } from './data/achievements.js';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -202,6 +217,199 @@ export function getLastExerciseSession(exerciseId) {
   return null;
 }
 
+// ── Profile ────────────────────────────────────────────────
+
+/**
+ * Devuelve el perfil del usuario.
+ * @returns {{ gender?, birthYear?, heightCm?, weightHistory: [] }}
+ */
+export function getProfile() {
+  return read(KEYS.PROFILE, { weightHistory: [] });
+}
+
+/**
+ * Guarda cambios parciales del perfil (gender, birthYear, heightCm).
+ * @param {object} partial
+ */
+export function saveProfile(partial) {
+  const current = getProfile();
+  write(KEYS.PROFILE, { ...current, ...partial });
+}
+
+/**
+ * Agrega una entrada de peso al historial.
+ * Si ya existe una entrada para hoy, la reemplaza.
+ * @param {number} weightKg
+ */
+export function addWeightEntry(weightKg) {
+  const profile = getProfile();
+  const today   = todayISO();
+  const history = profile.weightHistory ?? [];
+
+  const existingIdx = history.findIndex(e => e.date === today);
+  if (existingIdx >= 0) {
+    history[existingIdx] = { date: today, weightKg };
+  } else {
+    history.push({ date: today, weightKg });
+  }
+
+  write(KEYS.PROFILE, { ...profile, weightHistory: history });
+}
+
+/**
+ * Devuelve true si han pasado más de 7 días desde la última entrada de peso,
+ * o si no hay ningún registro de peso.
+ */
+export function needsWeightUpdate() {
+  const profile = getProfile();
+  const history = profile.weightHistory ?? [];
+  if (!history.length) return true;
+
+  const last     = history[history.length - 1].date;
+  const lastDate = new Date(last + 'T00:00:00');
+  const diffMs   = Date.now() - lastDate.getTime();
+  return diffMs > 7 * 24 * 60 * 60 * 1000;
+}
+
+// ── Calorie estimation ────────────────────────────────────
+
+/** MET aproximado por tipo de ejercicio */
+const MET_MAP = { strength: 5.0, cardio: 7.5, mobility: 2.5, stretch: 2.5 };
+
+/**
+ * Calcula las calorías estimadas de una sesión usando MET × peso × horas.
+ * @param {object} session
+ * @param {number|null} weightKg  Peso del usuario en kg
+ * @returns {number|null}
+ */
+export function calcEstimatedCalories(session, weightKg) {
+  if (!weightKg || !session.durationMin || !session.exercises.length) return null;
+  let totalMET = 0;
+  for (const ex of session.exercises) {
+    totalMET += MET_MAP[ex.type ?? 'strength'] ?? 5.0;
+  }
+  const avgMET = totalMET / session.exercises.length;
+  return Math.round(avgMET * weightKg * (session.durationMin / 60));
+}
+
+// ── 1RM estimado (Epley) ───────────────────────────────────
+
+/**
+ * Devuelve el mejor 1RM estimado para un ejercicio según la fórmula de Epley.
+ * @param {string} exerciseId
+ * @returns {{ weight: number, reps: number, rm: number }|null}
+ */
+export function getBestOneRM(exerciseId) {
+  const sessions = getSessions();
+  let bestRM  = 0;
+  let bestSet = null;
+
+  for (const session of sessions) {
+    const ex = session.exercises.find(e => e.exerciseId === exerciseId);
+    if (!ex) continue;
+    for (const set of ex.sets) {
+      if (set.weight > 0 && set.reps > 0) {
+        const rm = set.weight * (1 + set.reps / 30);
+        if (rm > bestRM) {
+          bestRM  = rm;
+          bestSet = { weight: set.weight, reps: set.reps, rm: Math.round(rm) };
+        }
+      }
+    }
+  }
+  return bestSet;
+}
+
+// ── Achievements ───────────────────────────────────────────
+
+/**
+ * Devuelve los logros desbloqueados.
+ * @returns {Array<{ id: string, unlockedAt: string }>}
+ */
+export function getAchievements() {
+  return read(KEYS.ACHIEVEMENTS, []);
+}
+
+/**
+ * Evalúa todos los logros contra el estado actual de los datos.
+ * Guarda los nuevos logros desbloqueados y devuelve sus definiciones.
+ * @returns {Array} — definiciones de logros recién desbloqueados
+ */
+export function checkAndUpdateAchievements() {
+  const allSessions  = getSessions();
+  const prs          = getPRs();
+  const prCount      = Object.keys(prs).length;
+  const totalVolume  = allSessions.reduce((sum, s) =>
+    sum + s.exercises.reduce((es, ex) =>
+      es + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0), 0);
+  const currentStreak = calcCurrentStreak(allSessions);
+  const maxStreak     = calcMaxStreak(allSessions);
+  const sessionCount  = allSessions.length;
+
+  const ctx = { sessionCount, prCount, totalVolume, currentStreak, maxStreak };
+
+  const unlocked    = getAchievements();
+  const unlockedIds = new Set(unlocked.map(a => a.id));
+  const today       = todayISO();
+  const newOnes     = [];
+
+  for (const def of ACHIEVEMENT_DEFS) {
+    if (unlockedIds.has(def.id)) continue;
+    if (def.check(ctx)) {
+      unlocked.push({ id: def.id, unlockedAt: today });
+      newOnes.push(def);
+    }
+  }
+
+  write(KEYS.ACHIEVEMENTS, unlocked);
+  return newOnes;
+}
+
+// ── Streak helpers (exported for reuse en progress.js) ─────
+
+export function calcCurrentStreak(sessions) {
+  const datesSet = new Set(sessions.map(s => s.date));
+  const today    = todayISO();
+  let streak = 0;
+  const d = new Date();
+
+  if (!datesSet.has(today)) d.setDate(d.getDate() - 1);
+
+  while (true) {
+    const iso = _dateToISO(d);
+    if (datesSet.has(iso)) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+export function calcMaxStreak(sessions) {
+  if (!sessions.length) return 0;
+  const dates = [...new Set(sessions.map(s => s.date))].sort();
+  let maxStreak = 1, current = 1;
+
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(dates[i - 1] + 'T00:00:00');
+    const curr = new Date(dates[i]     + 'T00:00:00');
+    const diff = Math.round((curr - prev) / 86400000);
+    if (diff === 1) {
+      current++;
+      if (current > maxStreak) maxStreak = current;
+    } else {
+      current = 1;
+    }
+  }
+  return maxStreak;
+}
+
+function _dateToISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // ── Backup: Export / Import ────────────────────────────────
 
 const BACKUP_VERSION = 1;
@@ -211,12 +419,14 @@ const BACKUP_VERSION = 1;
  */
 export function exportAllData() {
   return {
-    version:    BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
-    sessions:   read(KEYS.SESSIONS,  []),
-    exercises:  read(KEYS.EXERCISES, []),
-    settings:   read(KEYS.SETTINGS,  {}),
-    prs:        read(KEYS.PRS,       {}),
+    version:      BACKUP_VERSION,
+    exportedAt:   new Date().toISOString(),
+    sessions:     read(KEYS.SESSIONS,     []),
+    exercises:    read(KEYS.EXERCISES,    []),
+    settings:     read(KEYS.SETTINGS,     {}),
+    prs:          read(KEYS.PRS,          {}),
+    profile:      read(KEYS.PROFILE,      { weightHistory: [] }),
+    achievements: read(KEYS.ACHIEVEMENTS, []),
   };
 }
 
@@ -228,10 +438,12 @@ export function importAllData(data) {
   if (!data || typeof data !== 'object') throw new Error('Archivo inválido.');
   if (!Array.isArray(data.sessions))     throw new Error('El archivo no contiene sesiones válidas.');
 
-  write(KEYS.SESSIONS,  data.sessions  ?? []);
-  write(KEYS.EXERCISES, data.exercises ?? []);
-  write(KEYS.SETTINGS,  data.settings  ?? {});
-  write(KEYS.PRS,       data.prs       ?? {});
+  write(KEYS.SESSIONS,     data.sessions     ?? []);
+  write(KEYS.EXERCISES,    data.exercises    ?? []);
+  write(KEYS.SETTINGS,     data.settings     ?? {});
+  write(KEYS.PRS,          data.prs          ?? {});
+  write(KEYS.PROFILE,      data.profile      ?? { weightHistory: [] });
+  write(KEYS.ACHIEVEMENTS, data.achievements ?? []);
 }
 
 /**
