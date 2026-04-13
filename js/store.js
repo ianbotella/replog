@@ -97,10 +97,13 @@ export function getSessionsSorted() {
   return getSessions().sort((a, b) => b.date.localeCompare(a.date));
 }
 
-/** Devuelve la sesión del día actual, si existe. */
+/**
+ * Devuelve la sesión del día actual en curso (status !== 'done'), si existe.
+ * Las sesiones finalizadas no se retoman — solo las que están activas.
+ */
 export function getTodaySession() {
   const today = todayISO();
-  return getSessions().find(s => s.date === today) ?? null;
+  return getSessions().find(s => s.date === today && s.status !== 'done') ?? null;
 }
 
 /** Guarda una sesión nueva o actualiza una existente (por id). */
@@ -128,6 +131,7 @@ export function createSession(muscleGroup = null) {
     durationMin: 0,
     notes:       '',
     startedAt:   new Date().toISOString(),
+    status:      'active',
   };
   saveSession(session);
   return session;
