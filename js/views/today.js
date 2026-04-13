@@ -136,11 +136,23 @@ async function _startFromTemplate(template) {
       tip:         ex.tip,
       sets:        [],
     };
-    if (apiEx?.type)   sessionEx.type   = apiEx.type;
-    if (apiEx?.metric) sessionEx.metric = apiEx.metric;
+    // Tipo/métrica: del DB cuando disponible; fallback al campo del template
+    sessionEx.type   = apiEx?.type   ?? ex.type   ?? 'strength';
+    sessionEx.metric = apiEx?.metric ?? ex.metric ?? 'reps';
+    if (ex.required) sessionEx.required = true;
 
     for (let i = 0; i < ex.sets; i++) {
-      sessionEx.sets.push({ weight: 0, reps: ex.repsMin });
+      const t = sessionEx.type;
+      const m = sessionEx.metric;
+      if (t === 'cardio') {
+        sessionEx.sets.push({ durationMin: ex.durationMin ?? 20, speedKmh: ex.speedKmh ?? 5, inclinePct: ex.inclinePct ?? 0 });
+      } else if (t === 'stretch' || (t === 'mobility' && m === 'time')) {
+        sessionEx.sets.push({ durationSec: ex.durationSec ?? 30 });
+      } else if (t === 'mobility') {
+        sessionEx.sets.push({ reps: ex.repsMin ?? 10 });
+      } else {
+        sessionEx.sets.push({ weight: 0, reps: ex.repsMin });
+      }
     }
     _session.exercises.push(sessionEx);
   }
@@ -788,6 +800,8 @@ function _addExercise(exerciseId, name, extra = {}) {
 }
 
 function _deleteExercise(idx) {
+  const ex = _session.exercises[idx];
+  if (ex.required && !confirm(`"${ex.name}" es parte de la estructura de la rutina.\n¿Querés eliminarlo igualmente?`)) return;
   _session.exercises.splice(idx, 1);
   // Reconstruir _rpeState ajustando índices
   const newState = {};

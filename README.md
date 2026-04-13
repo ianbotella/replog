@@ -7,7 +7,8 @@
 ## Características principales
 
 ### Hoy — Registro de sesión activa
-- Iniciá una sesión libre o desde una **rutina predefinida** (Pecho + Tríceps, Espalda + Bíceps, Hombros + Piernas)
+- Iniciá una sesión libre o desde una **rutina predefinida** (Pecho + Tríceps, Espalda + Bíceps, Hombros + Piernas, Tren Superior, Tren Inferior)
+- Todas las rutinas predefinidas siguen una **estructura fija**: caminata en cinta 30 min (pre) → calentamiento específico → ejercicios principales → estiramiento específico → caminata en cinta 30 min (post)
 - Agregá ejercicios de fuerza, cardio, movilidad o estiramiento desde una biblioteca de más de 50 ejercicios
 - Creá tus propios ejercicios custom con grupo muscular, categoría y tipo
 - Registrá series con peso y repeticiones por ejercicio
