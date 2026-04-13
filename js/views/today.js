@@ -619,17 +619,23 @@ function _finishSession() {
   const calories    = calcEstimatedCalories(_session, lastWeight);
   if (calories) _session.estimatedCalories = calories;
 
+  _session.status = 'done';
   saveSession(_session);
-  _stopRestTimer();
-  if (_timerInterval) clearInterval(_timerInterval);
 
-  // Toast inicial: sesión guardada + calorías
-  const calText = calories ? ` · ~${calories} kcal` : '';
-  showToast(`Sesión guardada${calText}.`, 'success');
-
-  // PRs y logros (ambos evaluados sobre el estado post-guardado)
+  // PRs y logros — evaluados antes de limpiar el estado
   const newPRs          = checkAndUpdatePRs(_session);
   const newAchievements = checkAndUpdateAchievements();
+
+  // Limpiar COMPLETAMENTE el estado de la sesión activa
+  _stopRestTimer();
+  if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+  _session  = null;
+  _rpeState = {};
+  _render(); // Mostrar pantalla de inicio inmediatamente
+
+  // Toast inicial (aparece sobre la pantalla de inicio ya limpia)
+  const calText = calories ? ` · ~${calories} kcal` : '';
+  showToast(`Sesión guardada${calText}.`, 'success');
 
   if (!newPRs.length && !newAchievements.length) {
     setTimeout(() => { window.location.hash = '#/history'; }, 400);
