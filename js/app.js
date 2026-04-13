@@ -9,6 +9,7 @@ import { HistoryView }   from './views/history.js';
 import { ProgressView }  from './views/progress.js';
 import { ExercisesView } from './views/exercises.js';
 import { SettingsView }  from './views/settings.js';
+import { PlanningView }  from './views/planning.js';
 import { getSettings, saveSettings, needsWeightUpdate } from './store.js';
 import { initPWA } from './pwa.js';
 import { showActionToast } from './components/toast.js';
@@ -28,7 +29,8 @@ function init() {
     .register('history',   HistoryView)
     .register('progress',  ProgressView)
     .register('exercises', ExercisesView)
-    .register('settings',  SettingsView);
+    .register('settings',  SettingsView)
+    .register('planning',  PlanningView);
 
   // 4. Iniciar router (renderiza la vista actual)
   const container = document.getElementById('view-container');

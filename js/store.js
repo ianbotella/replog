@@ -52,6 +52,8 @@ const KEYS = {
   PRS:           'replog_prs',
   PROFILE:       'replog_profile',
   ACHIEVEMENTS:  'replog_achievements',
+  ROUTINES:      'replog_routines',
+  PLAN:          'replog_plan',
 };
 
 import { ACHIEVEMENT_DEFS } from './data/achievements.js';
@@ -414,6 +416,77 @@ function _dateToISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// ── Custom Routines ────────────────────────────────────────
+
+/**
+ * Devuelve las rutinas personalizadas del usuario.
+ * @returns {Array}
+ */
+export function getCustomRoutines() {
+  return read(KEYS.ROUTINES, []);
+}
+
+/**
+ * Guarda una rutina personalizada (crea o actualiza por id).
+ * Si no tiene id, genera uno nuevo.
+ * @param {object} routine
+ * @returns {object} — rutina con id garantizado
+ */
+export function saveCustomRoutine(routine) {
+  const routines = getCustomRoutines();
+  if (!routine.id) {
+    routine = { ...routine, id: uid(), createdAt: todayISO() };
+    routines.push(routine);
+  } else {
+    const idx = routines.findIndex(r => r.id === routine.id);
+    if (idx >= 0) {
+      routines[idx] = routine;
+    } else {
+      routines.push(routine);
+    }
+  }
+  write(KEYS.ROUTINES, routines);
+  return routine;
+}
+
+/**
+ * Elimina una rutina personalizada y la quita del plan semanal.
+ * @param {string} id
+ */
+export function deleteCustomRoutine(id) {
+  write(KEYS.ROUTINES, getCustomRoutines().filter(r => r.id !== id));
+  // Limpiar referencias del plan
+  const plan = getWeeklyPlan();
+  let changed = false;
+  Object.keys(plan).forEach(day => {
+    if (plan[day] === id) { plan[day] = null; changed = true; }
+  });
+  if (changed) write(KEYS.PLAN, plan);
+}
+
+// ── Weekly Plan ────────────────────────────────────────────
+
+const _DEFAULT_PLAN = {
+  monday: null, tuesday: null, wednesday: null, thursday: null,
+  friday: null, saturday: null, sunday: null,
+};
+
+/**
+ * Devuelve el plan semanal (un routine id o null por cada día).
+ * @returns {{ monday, tuesday, wednesday, thursday, friday, saturday, sunday }}
+ */
+export function getWeeklyPlan() {
+  return read(KEYS.PLAN, { ..._DEFAULT_PLAN });
+}
+
+/**
+ * Guarda el plan semanal.
+ * @param {object} plan
+ */
+export function saveWeeklyPlan(plan) {
+  write(KEYS.PLAN, plan);
+}
+
 // ── Backup: Export / Import ────────────────────────────────
 
 const BACKUP_VERSION = 1;
@@ -431,6 +504,8 @@ export function exportAllData() {
     prs:          read(KEYS.PRS,          {}),
     profile:      read(KEYS.PROFILE,      { weightHistory: [] }),
     achievements: read(KEYS.ACHIEVEMENTS, []),
+    routines:     read(KEYS.ROUTINES,     []),
+    plan:         read(KEYS.PLAN,         {}),
   };
 }
 
@@ -448,6 +523,8 @@ export function importAllData(data) {
   write(KEYS.PRS,          data.prs          ?? {});
   write(KEYS.PROFILE,      data.profile      ?? { weightHistory: [] });
   write(KEYS.ACHIEVEMENTS, data.achievements ?? []);
+  write(KEYS.ROUTINES,     data.routines     ?? []);
+  write(KEYS.PLAN,         data.plan         ?? {});
 }
 
 /**

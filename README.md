@@ -7,7 +7,10 @@
 ## Características principales
 
 ### Hoy — Registro de sesión activa
-- Iniciá una sesión libre o desde una **rutina predefinida** (Pecho + Tríceps, Espalda + Bíceps, Hombros + Piernas, Tren Superior, Tren Inferior)
+- Iniciá una sesión libre, desde una **rutina predefinida** o desde una **rutina personalizada**
+- Si el día actual tiene una rutina asignada en el Plan Semanal, aparece un banner "Sugerida para hoy" con botón Iniciar
+- Las rutinas personalizadas guardadas en Planificación aparecen en la sección "Mis rutinas" de la pantalla Hoy
+- La tira semanal muestra el nombre corto de la rutina asignada en el plan debajo de cada día
 - Todas las rutinas predefinidas siguen una **estructura fija**: caminata en cinta 30 min (pre) → calentamiento específico → ejercicios principales → estiramiento específico → caminata en cinta 30 min (post)
 - Agregá ejercicios de fuerza, cardio, movilidad o estiramiento desde una biblioteca de más de 50 ejercicios
 - Creá tus propios ejercicios custom con grupo muscular, categoría y tipo
@@ -79,6 +82,22 @@ Completá tu perfil en **Config. → Perfil** para habilitar métricas avanzadas
 ### Sistema de logros
 
 Replog desbloquea logros automáticamente al finalizar sesiones. Cada nuevo logro dispara un toast de celebración. Visualizalos en **Progreso → Logros**.
+
+### Planificación — Rutinas personalizadas y plan semanal
+
+#### Mis Rutinas
+- Visualizá las 5 rutinas predefinidas (no editables, marcadas con badge "Predefinida")
+- Creá rutinas personalizadas: nombre, grupo muscular, lista de ejercicios con series y valores sugeridos
+- Editá, duplicá o eliminá cualquier rutina personalizada
+- Reordenás ejercicios con botones ↑↓ dentro del editor
+- Series sugeridas editables por ejercicio (peso + reps para fuerza; minutos para cardio; segundos para movilidad/estiramiento)
+
+#### Plan Semanal
+- Asigná una rutina (predefinida o personalizada) a cada día de la semana (Lunes → Domingo)
+- Cada día muestra la rutina asignada con su badge de grupo muscular
+- Indicador de adherencia: ✅ Entrenado · ⏳ Pendiente · neutral sin rutina
+- La asignación se cruza contra las sesiones registradas en la semana actual
+- Cambiá o quitá la rutina de cualquier día en un tap
 
 ### Instalación como app nativa
 
@@ -263,11 +282,12 @@ replog/
     │   ├── routineTemplates.js
     │   └── achievements.js     # Definiciones de logros (14 logros en 4 categorías)
     ├── views/
-    │   ├── today.js       # Sesión activa (timer, supersets, RPE, last ref, share)
+    │   ├── today.js       # Sesión activa (timer, supersets, RPE, last ref, share, plan)
     │   ├── history.js     # Historial de sesiones (share, PR badge)
     │   ├── progress.js    # Análisis: ejercicio, grupos, PRs, estadísticas
     │   ├── exercises.js   # Biblioteca de ejercicios
-    │   └── settings.js    # Exportar / importar / borrar datos / instalar app
+    │   ├── settings.js    # Exportar / importar / borrar datos / instalar app
+    │   └── planning.js    # Rutinas personalizadas + plan semanal
     ├── utils/
     │   └── share.js       # Web Share API + clipboard fallback
     └── components/
@@ -285,6 +305,8 @@ replog/
 | `replog_prs` | Récords personales por ejercicio |
 | `replog_profile` | Perfil del usuario: género, año de nacimiento, altura, historial de peso |
 | `replog_achievements` | Logros desbloqueados con fecha |
+| `replog_routines` | Rutinas personalizadas creadas por el usuario (nombre, grupo muscular, ejercicios con series sugeridas) |
+| `replog_plan` | Plan semanal: un routine id (predefinida o custom) o null por cada día (monday → sunday) |
 
 ---
 
