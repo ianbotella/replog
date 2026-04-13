@@ -10,6 +10,8 @@
  *   offInstallPromptChange(fn) — elimina un callback registrado
  */
 
+import { showActionToast } from './components/toast.js';
+
 let _deferredPrompt = null;
 const _listeners = [];
 
@@ -22,10 +24,25 @@ function _notify() {
 export function initPWA() {
   // Registrar SW con ruta relativa (compatible con GitHub Pages en subdirectorio)
   if ('serviceWorker' in navigator) {
+    // Registrar si había un controller antes de instalar el SW nuevo.
+    // Si hadController es true y el controller cambia → es una actualización real.
+    const hadController = !!navigator.serviceWorker.controller;
+
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').catch(err => {
         console.warn('[Replog SW] Registration failed:', err);
       });
+    });
+
+    // Vía 1: controllerchange — se dispara cuando skipWaiting + clients.claim() terminan.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) _showUpdateToast();
+    });
+
+    // Vía 2: postMessage desde el SW — fallback para casos donde controllerchange
+    // se dispara antes de que pwa.js esté listo (ej: navegación desde caché).
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'SW_UPDATED') _showUpdateToast();
     });
   }
 
@@ -41,6 +58,23 @@ export function initPWA() {
     _deferredPrompt = null;
     _notify();
   });
+}
+
+// ── Toast de actualización ────────────────────────────────
+
+const _UPDATE_SESSION_KEY = 'replog_update_toast_shown';
+
+function _showUpdateToast() {
+  // Mostrar solo una vez por sesión de navegación
+  if (sessionStorage.getItem(_UPDATE_SESSION_KEY)) return;
+  sessionStorage.setItem(_UPDATE_SESSION_KEY, '1');
+
+  showActionToast(
+    'Nueva versión disponible 🎉',
+    'success',
+    'Actualizar',
+    () => window.location.reload(),
+  );
 }
 
 // ── API pública ───────────────────────────────────────────
