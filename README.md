@@ -15,6 +15,7 @@
 - Agregá ejercicios de fuerza, cardio, movilidad o estiramiento desde una biblioteca de más de 50 ejercicios
 - Creá tus propios ejercicios custom con grupo muscular, categoría y tipo
 - Registrá series con peso y repeticiones por ejercicio
+- **Unidad de peso por ejercicio** — chips kg / lb / PC (Peso Corporal) en cada bloque de ejercicio; los valores se convierten automáticamente al cambiar de unidad; el volumen siempre se calcula en kg internamente
 - **Temporizador de descanso** entre series (60 / 90 / 120 s) con cuenta regresiva flotante, vibración y beep de audio al llegar a cero
 - **Supersets / Circuitos**: agrupá ejercicios visualmente; el timer solo dispara al terminar el último del grupo
 - **RPE / RIR opcional por serie**: toggle por ejercicio para registrar esfuerzo percibido o repeticiones en reserva
@@ -24,7 +25,8 @@
 
 ### Historial
 - Todas las sesiones ordenadas por fecha, agrupadas por mes
-- Cada tarjeta muestra grupo muscular, volumen total, duración y resumen por ejercicio
+- Cada tarjeta muestra grupo muscular, volumen total (en kg), duración y resumen por ejercicio
+- El mejor set de cada ejercicio se muestra con su unidad original ("80 kg × 10", "176 lb × 10", "Peso corporal × 10")
 - Badge **🏆 PR** en los ejercicios donde se estableció un récord personal
 - Valores de RPE / RIR registrados visibles en el resumen de series
 - Botón **Compartir** en cada tarjeta para enviar el resumen de la sesión
@@ -34,7 +36,7 @@
 
 #### Ejercicio
 - Selector de ejercicio con búsqueda instantánea
-- Gráfico de línea con toggle **Peso máximo / Volumen total** por sesión
+- Gráfico de línea con toggle **Peso máximo / Volumen total** por sesión (valores siempre en kg)
 - El gráfico de volumen usa color azul para distinguirse del verde de peso
 - Tabla de últimas 10 sesiones con fecha, máximo kg, series y reps
 
@@ -107,13 +109,12 @@ Replog es una PWA instalable. Una vez instalada, aparece en la pantalla de inici
 - **iOS (Safari)**: tocá el botón Compartir → "Agregar a pantalla de inicio".
 - **Desktop (Chrome / Edge)**: hacé clic en el ícono de instalación en la barra de direcciones, o usá el menú → "Instalar Replog".
 
-### Configuración — Datos y backup
-- **Exportar JSON**: backup completo y reimportable (sesiones, ejercicios, PRs, config)
+### Configuración — Datos y preferencias
+- **Unidad de peso predeterminada** — elegí kg o lb en **Config. → Preferencias**; se aplica como valor inicial en cada nuevo ejercicio de la sesión
+- **Exportar JSON**: backup completo y reimportable (sesiones, ejercicios, PRs, config, rutinas, plan)
 - **Exportar CSV**: solo el historial de sesiones, para analizar en Excel o Sheets
 - **Importar**: restaurar un backup JSON con validación previa y confirmación
 - **Borrar datos**: limpiar todo el historial desde la zona de peligro
-
----
 
 ---
 
@@ -136,6 +137,27 @@ Replog es una PWA instalable. Una vez instalada, aparece en la pantalla de inici
 | Edad | `año_actual − año_nacimiento` |
 | Calorías (por sesión) | `MET × peso_kg × duración_horas` (MET: Fuerza 5.0 · Cardio 7.5 · Movilidad 2.5) |
 | 1RM (Epley) | `peso × (1 + reps / 30)` — mejor set histórico de cada ejercicio |
+
+---
+
+## Unidades de peso
+
+### Selección por ejercicio
+En cada bloque de ejercicio de la sesión activa, aparecen tres chips: **kg · lb · PC** (Peso Corporal). El chip seleccionado aplica a todas las series de ese ejercicio.
+
+| Unidad | Comportamiento |
+|---|---|
+| **kg** | Input numérico. `set.weight` en kg. |
+| **lb** | Input numérico. `set.weight` en lb; internamente se guarda `weightKg = weight / 2.2046`. |
+| **PC** | Input deshabilitado (muestra "PC"). `weightKg` = último peso corporal del perfil. Toast si no hay peso registrado. |
+
+Al cambiar de unidad en un ejercicio ya con series cargadas, los valores se convierten automáticamente (kg ↔ lb).
+
+### Unidad predeterminada global
+Se configura en **Configuración → Preferencias**. Se usa como unidad inicial al agregar una nueva serie (si no se cambió el chip del ejercicio).
+
+### Volumen siempre en kg
+Todo el cálculo de volumen, PRs y gráficos usa `weightKg` internamente. Los sets históricos sin el campo `weightKg` hacen fallback a `weight` directamente (retrocompatibles).
 
 ---
 
@@ -180,7 +202,7 @@ Al finalizar cada sesión, Replog compara automáticamente los pesos registrados
 
 > 🏆 Nuevo PR: Press de Banca — 85 kg
 
-Los PRs se actualizan en localStorage y aparecen marcados en el historial.
+Los PRs se almacenan siempre en kg (independientemente de la unidad usada en la sesión) y aparecen marcados en el historial.
 
 ---
 
@@ -221,7 +243,7 @@ Fondos en Paralelas
 2. Tocar **Exportar JSON** para descargar `replog-backup-YYYY-MM-DD.json`
 3. Guardar el archivo en un lugar seguro (Drive, iCloud, pendrive)
 
-El JSON incluye todas las sesiones, ejercicios custom, PRs y configuración.
+El JSON incluye todas las sesiones, ejercicios custom, PRs, rutinas personalizadas, plan semanal y configuración.
 
 ### Restaurar un backup
 
@@ -234,7 +256,7 @@ El JSON incluye todas las sesiones, ejercicios custom, PRs y configuración.
 
 ### Exportar CSV para análisis
 
-El CSV incluye una fila por sesión con: fecha, grupo muscular, duración, cantidad de ejercicios, series, volumen total y notas. Es compatible con Excel, Google Sheets y cualquier herramienta de análisis de datos.
+El CSV incluye una fila por sesión con: fecha, grupo muscular, duración, cantidad de ejercicios, series, volumen total (en kg) y notas. Es compatible con Excel, Google Sheets y cualquier herramienta de análisis de datos.
 
 ---
 
@@ -246,7 +268,7 @@ El CSV incluye una fila por sesión con: fecha, grupo muscular, duración, canti
 | Gráficos | [Chart.js 4](https://www.chartjs.org/) vía CDN |
 | Iconos | [Lucide Icons](https://lucide.dev/) vía CDN |
 | Almacenamiento | `localStorage` (sin servidor, sin cuenta) |
-| Navegación | SPA con hash router (`#/today`, `#/history`, `#/progress`, `#/exercises`, `#/settings`) |
+| Navegación | SPA con hash router (`#/today`, `#/history`, `#/progress`, `#/exercises`, `#/planning`, `#/settings`) |
 | Estilos | CSS puro con custom properties (design tokens) |
 | PWA | Service Worker (Cache First), Web App Manifest, instalable en homescreen |
 | Deploy | GitHub Pages (rama main, raíz) |
@@ -265,7 +287,7 @@ replog/
 ├── css/
 │   ├── variables.css      # Design tokens (colores, tipografía, espaciado)
 │   ├── reset.css
-│   ├── layout.css         # Shell, header, bottom nav
+│   ├── layout.css         # Shell, header, bottom nav (6 tabs)
 │   ├── components.css     # Botones, inputs, badges, toasts, modales
 │   └── views.css          # Estilos específicos por vista
 ├── assets/
@@ -274,19 +296,19 @@ replog/
 └── js/
     ├── app.js             # Entry point, router init, tema, PWA init
     ├── router.js          # Hash router
-    ├── store.js           # CRUD localStorage + backup + PRs + date utils
+    ├── store.js           # CRUD localStorage + backup + PRs + volumen + date utils
     ├── pwa.js             # SW registration + install prompt API
     ├── data/
     │   ├── exercises.js        # Definición de grupos musculares
     │   ├── freeExerciseDb.js   # Biblioteca de ejercicios externos
-    │   ├── routineTemplates.js
+    │   ├── routineTemplates.js # 5 rutinas predefinidas
     │   └── achievements.js     # Definiciones de logros (14 logros en 4 categorías)
     ├── views/
-    │   ├── today.js       # Sesión activa (timer, supersets, RPE, last ref, share, plan)
-    │   ├── history.js     # Historial de sesiones (share, PR badge)
-    │   ├── progress.js    # Análisis: ejercicio, grupos, PRs, estadísticas
+    │   ├── today.js       # Sesión activa (timer, supersets, RPE, last ref, unidades, share, plan)
+    │   ├── history.js     # Historial de sesiones (share, PR badge, unidades originales)
+    │   ├── progress.js    # Análisis: ejercicio, grupos, PRs, estadísticas, logros
     │   ├── exercises.js   # Biblioteca de ejercicios
-    │   ├── settings.js    # Exportar / importar / borrar datos / instalar app
+    │   ├── settings.js    # Preferencias, perfil, exportar / importar / borrar datos / instalar app
     │   └── planning.js    # Rutinas personalizadas + plan semanal
     ├── utils/
     │   └── share.js       # Web Share API + clipboard fallback
@@ -299,14 +321,30 @@ replog/
 
 | Clave | Contenido |
 |---|---|
-| `replog_sessions` | Array de sesiones con ejercicios y series |
+| `replog_sessions` | Array de sesiones con ejercicios y series (`weightUnit`, `weightKg` por set desde v7) |
 | `replog_exercises` | Ejercicios custom creados por el usuario |
-| `replog_settings` | Tema (dark/light), duración del timer de descanso |
-| `replog_prs` | Récords personales por ejercicio |
+| `replog_settings` | Tema (dark/light), duración del timer de descanso, unidad de peso predeterminada (kg/lb) |
+| `replog_prs` | Récords personales por ejercicio (peso siempre en kg) |
 | `replog_profile` | Perfil del usuario: género, año de nacimiento, altura, historial de peso |
 | `replog_achievements` | Logros desbloqueados con fecha |
 | `replog_routines` | Rutinas personalizadas creadas por el usuario (nombre, grupo muscular, ejercicios con series sugeridas) |
 | `replog_plan` | Plan semanal: un routine id (predefinida o custom) o null por cada día (monday → sunday) |
+
+### Modelo de un Set
+
+```js
+// Fuerza — kg
+{ weight: 80, reps: 10, weightUnit: 'kg', weightKg: 80 }
+
+// Fuerza — lb
+{ weight: 176, reps: 10, weightUnit: 'lb', weightKg: 79.83 }
+
+// Peso corporal
+{ weight: 75, reps: 10, weightUnit: 'bw', weightKg: 75 }
+
+// Histórico (retrocompatible, sin nuevos campos)
+{ weight: 80, reps: 10 }  // resolveWeightKg() devuelve set.weight directamente
+```
 
 ---
 
@@ -326,7 +364,7 @@ Los colores de grupos musculares son consistentes en toda la app:
 1. Pusheá la rama `main` al repositorio
 2. Ir a **Settings → Pages → Branch: main / (root)**
 3. La app queda disponible en `https://<usuario>.github.io/replog`
-4. **Incrementar `CACHE_NAME` en `sw.js`** en cada deploy (`replog-v2` → `replog-v3` → ...) para invalidar la caché vieja y activar la actualización automática en todos los dispositivos
+4. **Incrementar `CACHE_NAME` en `sw.js`** en cada deploy (`replog-v8` → `replog-v9` → ...) para invalidar la caché vieja y activar la actualización automática en todos los dispositivos
 
 No requiere CI, build step ni variables de entorno.
 
@@ -352,7 +390,7 @@ No es necesario limpiar la caché del navegador ni hacer hard refresh manualment
 
 ## Capturas
 
-> *La app cuenta con tema oscuro y claro, bottom navigation con 5 tabs, tarjetas de sesión expandibles, gráficos de línea y barras, overlay de temporizador de descanso, lista de récords personales y pantalla de configuración con backup.*
+> *La app cuenta con tema oscuro y claro, bottom navigation con 6 tabs, tarjetas de sesión expandibles, gráficos de línea y barras, overlay de temporizador de descanso, lista de récords personales, vista de planificación con editor de rutinas y plan semanal, y pantalla de configuración con backup.*
 
 ---
 

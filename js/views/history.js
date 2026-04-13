@@ -5,7 +5,7 @@
 
 import {
   getSessionsSorted, deleteSession, formatDateDisplay, getCustomExercises, getPRs,
-  calcSessionVolume,
+  calcSessionVolume, resolveWeightKg,
 } from '../store.js';
 import { getSessionGroupDisplay } from '../data/exercises.js';
 import { showToast } from '../components/toast.js';
@@ -72,9 +72,9 @@ function _sessionCardHTML(session) {
 
   const exerciseRows = session.exercises.map(ex => {
     const bestSet  = _bestSet(ex.sets);
-    // PR badge: esta sesión es donde se estableció el PR actual del ejercicio
+    // PR badge: PRs están almacenados en kg; comparar con resolveWeightKg del mejor set
     const isPR     = prs[ex.exerciseId]?.date === session.date && bestSet !== null
-                     && prs[ex.exerciseId]?.weight === bestSet.weight;
+                     && prs[ex.exerciseId]?.weight === resolveWeightKg(bestSet);
     // RPE / RIR: mostrar el primer valor registrado si existe
     const rpeVal   = ex.sets.find(s => s.rpe)?.rpe;
     const rirEntry = ex.sets.find(s => s.rir !== undefined && s.rir !== null);
@@ -83,7 +83,8 @@ function _sessionCardHTML(session) {
       : rirEntry !== undefined
         ? ` · RIR ${rirEntry.rir}`
         : '';
-    const setsText = `${ex.sets.length} serie${ex.sets.length !== 1 ? 's' : ''}${bestSet ? ` · ${bestSet.weight}kg × ${bestSet.reps}` : ''}${rpeText}`;
+    const bestLabel = bestSet ? ` · ${_weightLabel(bestSet)} × ${bestSet.reps}` : '';
+    const setsText  = `${ex.sets.length} serie${ex.sets.length !== 1 ? 's' : ''}${bestLabel}${rpeText}`;
     return `
       <div class="history-exercise-item">
         <span>${ex.name}${isPR ? ' <span class="pr-badge">🏆 PR</span>' : ''}</span>
@@ -178,9 +179,15 @@ function _confirmDelete(id) {
 
 function _bestSet(sets) {
   if (!sets || sets.length === 0) return null;
-  const valid = sets.filter(s => s.weight > 0 && s.reps > 0);
+  const valid = sets.filter(s => resolveWeightKg(s) > 0 && s.reps > 0);
   if (valid.length === 0) return null;
-  return valid.reduce((best, s) => (s.weight > best.weight ? s : best), valid[0]);
+  return valid.reduce((best, s) => (resolveWeightKg(s) > resolveWeightKg(best) ? s : best), valid[0]);
+}
+
+function _weightLabel(set) {
+  if (set.weightUnit === 'bw') return 'Peso corporal';
+  if (set.weightUnit === 'lb') return `${set.weight} lb`;
+  return `${set.weight} kg`;
 }
 
 function _capitalize(str) {
