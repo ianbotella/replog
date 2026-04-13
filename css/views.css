@@ -556,6 +556,63 @@
   outline: none;
 }
 
+/* ── Week day plan label ─────────────────────────────────── */
+.week-day-plan {
+  font-size: 9px;
+  color: var(--accent-primary);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+/* ════════════════════════════════════════════════════════════
+   VIEW: PLANIFICACIÓN
+   ════════════════════════════════════════════════════════════ */
+
+/* Editor: cabecera de columnas de series */
+.editor-sets-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-1);
+}
+
+.editor-sets-header span:first-child { min-width: 22px; text-align: center; }
+
+/* Editor: fila de serie */
+.editor-set-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.editor-set-num {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  min-width: 22px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-set-row .input-number {
+  width: 64px;
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-1);
+}
+
 /* ── Superset group ───────────────────────────────────────── */
 .superset-group {
   padding-left: var(--space-3);

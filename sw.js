@@ -11,7 +11,7 @@
 // postMessage para mostrar el toast "Nueva versión disponible".
 // ─────────────────────────────────────────────────────────────
 
-const CACHE_NAME = 'replog-v4';
+const CACHE_NAME = 'replog-v5';
 
 // Flag: true si había un SW activo antes → es una actualización, no la primera instalación.
 let _isUpdate = false;
@@ -47,6 +47,7 @@ const CACHE_FILES = [
   './js/views/progress.js',
   './js/views/exercises.js',
   './js/views/settings.js',
+  './js/views/planning.js',
 
   // JS — utils & components
   './js/utils/share.js',

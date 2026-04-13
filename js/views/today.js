@@ -17,6 +17,7 @@ import {
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
   getSettings, saveSettings, getLastExerciseSession, checkAndUpdatePRs,
   getProfile, calcEstimatedCalories, checkAndUpdateAchievements,
+  getCustomRoutines, getWeeklyPlan,
 } from '../store.js';
 import {
   MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
@@ -74,20 +75,50 @@ function _renderStartScreen() {
   const today          = formatDateDisplay(todayISO());
   const weekDays       = currentWeekDays();
   const completedDates = new Set(getThisWeekSessions().map(s => s.date));
+  const customRoutines = getCustomRoutines();
+  const plan           = getWeeklyPlan();
+
+  // Clave del día actual (0=Dom → sunday)
+  const _DAY_KEYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const todayDayKey    = _DAY_KEYS[new Date().getDay()];
+  const todayPlanEntry = plan[todayDayKey] ?? null;
+
+  // Etiquetas del plan para la tira semanal (Mon-Sun = índices 0-6)
+  const _WEEK_KEYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+  const allRoutineNames = [
+    ...ROUTINE_TEMPLATES.map(t => ({ id: t.id, label: t.name.split(' ')[0] })),
+    ...customRoutines.map(r => ({ id: r.id, label: r.name.substring(0, 6) })),
+  ];
+  const planLabels = weekDays.map((_, i) => {
+    const entry = plan[_WEEK_KEYS[i]];
+    if (!entry) return null;
+    return allRoutineNames.find(x => x.id === entry)?.label ?? null;
+  });
 
   _container.innerHTML = `
     <div class="view">
       <h1 class="page-title">Hoy</h1>
       <p class="page-subtitle">${_capitalize(today)}</p>
 
-      ${_weekStripHTML(weekDays, completedDates)}
+      ${_weekStripHTML(weekDays, completedDates, planLabels)}
+
+      ${todayPlanEntry ? _todaySuggestionBannerHTML(todayPlanEntry, customRoutines) : ''}
 
       <div class="section-header" style="margin-bottom:var(--space-3)">
-        <span class="section-title">Rutinas</span>
+        <span class="section-title">Rutinas predefinidas</span>
       </div>
       <div id="routine-templates-list" style="display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-5)">
-        ${ROUTINE_TEMPLATES.map(_routineTemplateCardHTML).join('')}
+        ${ROUTINE_TEMPLATES.map(t => _routineTemplateCardHTML(t, todayPlanEntry === t.id)).join('')}
       </div>
+
+      ${customRoutines.length > 0 ? `
+        <div class="section-header" style="margin-bottom:var(--space-3)">
+          <span class="section-title">Mis rutinas</span>
+        </div>
+        <div id="custom-routines-list" style="display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-5)">
+          ${customRoutines.map(r => _customRoutineCardHTML(r, todayPlanEntry === r.id)).join('')}
+        </div>
+      ` : ''}
 
       <button class="btn btn-secondary btn-full" id="start-free-btn">
         <i data-lucide="shuffle"></i>
@@ -97,19 +128,105 @@ function _renderStartScreen() {
   `;
 
   _container.querySelector('#start-free-btn').addEventListener('click', _startFreeSession);
+
+  // Rutina sugerida del plan
+  _container.querySelector('#start-suggested-btn')?.addEventListener('click', async () => {
+    const template = ROUTINE_TEMPLATES.find(t => t.id === todayPlanEntry);
+    if (template) { await _startFromTemplate(template); return; }
+    const routine  = customRoutines.find(r => r.id === todayPlanEntry);
+    if (routine)  _startFromCustomRoutine(routine);
+  });
+
   _container.querySelector('#routine-templates-list').addEventListener('click', async e => {
     const card = e.target.closest('[data-template-id]');
     if (!card) return;
     const template = ROUTINE_TEMPLATES.find(t => t.id === card.dataset.templateId);
     if (template) await _startFromTemplate(template);
   });
+
+  _container.querySelector('#custom-routines-list')?.addEventListener('click', e => {
+    const card = e.target.closest('[data-custom-routine-id]');
+    if (!card) return;
+    const routine = customRoutines.find(r => r.id === card.dataset.customRoutineId);
+    if (routine) _startFromCustomRoutine(routine);
+  });
 }
 
-function _routineTemplateCardHTML(t) {
+function _todaySuggestionBannerHTML(planEntry, customRoutines) {
+  const template = ROUTINE_TEMPLATES.find(t => t.id === planEntry);
+  let name, badgeClass;
+  if (template) {
+    const g = MUSCLE_GROUPS.find(g => g.id === template.muscleGroup);
+    name = template.name;
+    badgeClass = g?.badgeClass ?? 'badge-neutral';
+  } else {
+    const routine = customRoutines.find(r => r.id === planEntry);
+    if (!routine) return '';
+    const g = MUSCLE_GROUPS.find(g => g.id === routine.muscleGroup);
+    name = routine.name;
+    badgeClass = g?.badgeClass ?? 'badge-neutral';
+  }
+
+  return `
+    <div style="background:var(--accent-subtle);border:1px solid var(--accent-muted);
+                border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);
+                margin-bottom:var(--space-4);
+                display:flex;align-items:center;justify-content:space-between;gap:var(--space-3)">
+      <div>
+        <div style="font-size:var(--text-xs);color:var(--accent-primary);font-weight:var(--weight-semibold);
+                    text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Sugerida para hoy</div>
+        <span class="badge ${badgeClass}">${name}</span>
+      </div>
+      <button class="btn btn-primary btn-sm" id="start-suggested-btn">
+        <i data-lucide="play"></i> Iniciar
+      </button>
+    </div>`;
+}
+
+function _customRoutineCardHTML(r, isSuggested = false) {
+  const group      = MUSCLE_GROUPS.find(g => g.id === r.muscleGroup);
+  const badgeClass = group?.badgeClass ?? 'badge-neutral';
+  const groupName  = group?.name ?? 'General';
+  const border     = isSuggested ? ';border-color:var(--accent-muted)' : '';
+  return `
+    <div class="exercise-item" data-custom-routine-id="${r.id}" style="cursor:pointer${border}">
+      <div class="exercise-item-info">
+        <div class="exercise-item-name">${r.name}</div>
+        <div class="exercise-item-meta">${groupName}</div>
+      </div>
+      <div class="exercise-item-actions">
+        <span class="badge ${badgeClass}" style="flex-shrink:0">${r.exercises.length} ejercicios</span>
+        <i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0"></i>
+      </div>
+    </div>`;
+}
+
+function _startFromCustomRoutine(routine) {
+  _session  = createSession(routine.muscleGroup ?? null);
+  _rpeState = {};
+
+  for (const ex of routine.exercises) {
+    const sessionEx = {
+      exerciseId:  ex.exerciseId,
+      name:        ex.name,
+      muscleGroup: ex.muscleGroup ?? routine.muscleGroup ?? null,
+      type:        ex.type   ?? 'strength',
+      metric:      ex.metric ?? 'reps',
+      sets:        ex.sets.map(s => ({ ...s })), // copia para no mutar la rutina
+    };
+    _session.exercises.push(sessionEx);
+  }
+
+  saveSession(_session);
+  _render();
+}
+
+function _routineTemplateCardHTML(t, isSuggested = false) {
   const group      = MUSCLE_GROUPS.find(g => g.id === t.muscleGroup);
   const badgeClass = group?.badgeClass ?? 'badge-neutral';
+  const border     = isSuggested ? ';border-color:var(--accent-muted)' : '';
   return `
-    <div class="exercise-item" data-template-id="${t.id}" style="cursor:pointer">
+    <div class="exercise-item" data-template-id="${t.id}" style="cursor:pointer${border}">
       <div class="exercise-item-info">
         <div class="exercise-item-name">${t.name}</div>
         <div class="exercise-item-meta">${t.description}</div>
@@ -1112,20 +1229,22 @@ function _startTimer() {
 
 // ── Week strip ─────────────────────────────────────────────
 
-function _weekStripHTML(weekDays, completedDates) {
+function _weekStripHTML(weekDays, completedDates, planLabels = []) {
   const todayStr = todayISO();
   return `
     <div class="week-strip" style="margin-bottom:var(--space-6)">
-      ${weekDays.map(d => {
+      ${weekDays.map((d, i) => {
         const isToday     = d.iso === todayStr;
         const isCompleted = completedDates.has(d.iso);
         let dotClass = 'week-day-dot';
         if (isCompleted) dotClass += ' completed';
         if (isToday)     dotClass += ' today';
+        const planLabel = planLabels[i] ?? null;
         return `
           <div class="week-day">
             <span class="week-day-label">${d.label}</span>
             <div class="${dotClass}">${d.dayNum}</div>
+            ${planLabel ? `<span class="week-day-plan" title="${planLabel}">${planLabel}</span>` : ''}
           </div>`;
       }).join('')}
     </div>`;
