@@ -117,6 +117,7 @@ function _sessionCardHTML(session) {
         <span>${setCount} series</span>
         ${totalVol > 0 ? `<span>·</span><span>${totalVol.toLocaleString('es-AR')} kg vol.</span>` : ''}
         ${dur ? `<span>·</span><i data-lucide="timer"></i><span>${dur}</span>` : ''}
+        ${session.estimatedCalories ? `<span>·</span><i data-lucide="flame"></i><span>~${session.estimatedCalories} kcal</span>` : ''}
       </div>
 
       <div class="history-exercises">

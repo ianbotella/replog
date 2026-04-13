@@ -9,8 +9,9 @@ import { HistoryView }   from './views/history.js';
 import { ProgressView }  from './views/progress.js';
 import { ExercisesView } from './views/exercises.js';
 import { SettingsView }  from './views/settings.js';
-import { getSettings, saveSettings } from './store.js';
+import { getSettings, saveSettings, needsWeightUpdate } from './store.js';
 import { initPWA } from './pwa.js';
+import { showActionToast } from './components/toast.js';
 
 // ── Init ───────────────────────────────────────────────────
 
@@ -41,6 +42,26 @@ function init() {
   if (!window.location.hash) {
     router.navigate('#/today');
   }
+
+  // 7. Notificación semanal de peso (una vez por sesión de navegación)
+  _maybeShowWeightNotification();
+}
+
+function _maybeShowWeightNotification() {
+  const SESSION_KEY = 'replog_weight_notif_shown';
+  if (sessionStorage.getItem(SESSION_KEY)) return;
+  if (!needsWeightUpdate()) return;
+
+  sessionStorage.setItem(SESSION_KEY, '1');
+
+  setTimeout(() => {
+    showActionToast(
+      '¿Actualizaste tu peso esta semana? Mantenerlo al día mejora tus métricas 💪',
+      'info',
+      'Ir a Config.',
+      () => { window.location.hash = '#/settings'; },
+    );
+  }, 1500);
 }
 
 // ── Tema ───────────────────────────────────────────────────

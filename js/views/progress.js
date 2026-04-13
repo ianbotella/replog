@@ -9,9 +9,12 @@
  */
 
 import {
-  getExerciseHistory, getSessions, getCustomExercises, getPRs, todayISO,
+  getExerciseHistory, getSessions, getCustomExercises, getPRs,
+  getProfile, getBestOneRM, getAchievements,
+  calcCurrentStreak, calcMaxStreak,
 } from '../store.js';
 import { MUSCLE_GROUPS } from '../data/exercises.js';
+import { ACHIEVEMENT_DEFS, ACHIEVEMENT_CATEGORY_LABELS } from '../data/achievements.js';
 
 // Hex fijos de los grupos musculares (mirror de variables.css)
 const GROUP_COLORS = {
@@ -23,14 +26,15 @@ const GROUP_COLORS = {
 
 // ── Estado del módulo ──────────────────────────────────────
 
-let _container   = null;
-let _chart       = null;
-let _groupChart  = null;
-let _activeTab   = 'ejercicio';  // 'ejercicio' | 'grupos' | 'records' | 'stats'
-let _selectedEx  = null;
-let _chartMetric = 'weight';     // 'weight' | 'volume'
-let _groupPeriod = '1m';         // '1w' | '1m' | '3m'
-let _statsPeriod = '1m';         // '1w' | '1m' | '3m' | 'all'
+let _container    = null;
+let _chart        = null;
+let _groupChart   = null;
+let _weightChart  = null;
+let _activeTab    = 'ejercicio';  // 'ejercicio' | 'grupos' | 'records' | 'stats' | 'logros'
+let _selectedEx   = null;
+let _chartMetric  = 'weight';     // 'weight' | 'volume'
+let _groupPeriod  = '1m';         // '1w' | '1m' | '3m'
+let _statsPeriod  = '1m';         // '1w' | '1m' | '3m' | 'all'
 
 let _clickHandler = null;
 let _inputHandler = null;
@@ -84,7 +88,7 @@ function _render() {
       </div>
 
       <div class="progress-tabs">
-        ${['ejercicio', 'grupos', 'records', 'stats'].map(t => `
+        ${['ejercicio', 'grupos', 'records', 'stats', 'logros'].map(t => `
           <button class="progress-tab${_activeTab === t ? ' active' : ''}" data-tab="${t}">
             ${_tabLabel(t)}
           </button>
@@ -102,7 +106,13 @@ function _render() {
 }
 
 function _tabLabel(tab) {
-  return { ejercicio: 'Ejercicio', grupos: 'Grupos', records: 'Récords', stats: 'Estadísticas' }[tab];
+  return {
+    ejercicio: 'Ejercicio',
+    grupos:    'Grupos',
+    records:   'Récords',
+    stats:     'Estadísticas',
+    logros:    'Logros',
+  }[tab];
 }
 
 function _renderTabContent() {
@@ -111,6 +121,7 @@ function _renderTabContent() {
     case 'grupos':    return _gruposTabHTML();
     case 'records':   return _recordsTabHTML();
     case 'stats':     return _statsTabHTML();
+    case 'logros':    return _logrosTabHTML();
     default:          return '';
   }
 }
@@ -166,6 +177,23 @@ function _ejercicioTabHTML() {
     </div>
 
     ${history.length > 0 ? _historyTableHTML(history) : ''}
+    ${_selectedEx ? _oneRMHTML(_selectedEx) : ''}
+  `;
+}
+
+function _oneRMHTML(exerciseId) {
+  const best = getBestOneRM(exerciseId);
+  if (!best) return '';
+  return `
+    <div class="chart-card" style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)">
+      <div>
+        <div style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:2px">1RM estimado (Epley)</div>
+        <div style="font-size:var(--text-xs);color:var(--text-tertiary)">Basado en ${best.weight} kg × ${best.reps} reps</div>
+      </div>
+      <div style="font-size:var(--text-xl);font-weight:var(--weight-bold);color:var(--accent-primary);white-space:nowrap">
+        ${best.rm} kg
+      </div>
+    </div>
   `;
 }
 
@@ -280,10 +308,13 @@ function _recordsTabHTML() {
 // ── Tab: Estadísticas ──────────────────────────────────────
 
 function _statsTabHTML() {
-  const PERIOD_LABELS = { '1w': 'Semana', '1m': 'Mes', '3m': '3 meses', 'all': 'Todo' };
+  const PERIOD_LABELS  = { '1w': 'Semana', '1m': 'Mes', '3m': '3 meses', 'all': 'Todo' };
   const allSessions    = getSessions();
   const periodSessions = _filterSessionsByPeriod(allSessions, _statsPeriod);
   const stats          = _calcStats(periodSessions, allSessions);
+
+  const weightHistory  = (getProfile().weightHistory ?? []).sort((a, b) => a.date.localeCompare(b.date));
+  const hasWeightChart = weightHistory.length >= 2;
 
   return `
     <div class="chip-group" style="margin-bottom:var(--space-4)">
@@ -324,6 +355,16 @@ function _statsTabHTML() {
       <div class="chart-title" style="margin-bottom:var(--space-4)">Distribución por día</div>
       ${_weekdayDistHTML(periodSessions)}
     </div>
+
+    ${hasWeightChart ? `
+      <div class="chart-card" style="margin-top:var(--space-3)">
+        <div class="chart-title">Evolución de peso corporal</div>
+        <div class="chart-subtitle">${weightHistory.length} registros · Último: ${weightHistory.slice(-1)[0].weightKg} kg</div>
+        <div class="chart-wrapper">
+          <canvas id="weight-chart"></canvas>
+        </div>
+      </div>
+    ` : ''}
   `;
 }
 
@@ -358,6 +399,7 @@ function _weekdayDistHTML(sessions) {
 function _renderCharts() {
   if (_activeTab === 'ejercicio') _renderExerciseChart();
   if (_activeTab === 'grupos')    _renderGroupChart();
+  if (_activeTab === 'stats')     _renderWeightChart();
 }
 
 function _renderExerciseChart() {
@@ -501,9 +543,76 @@ function _renderGroupChart() {
   });
 }
 
+function _renderWeightChart() {
+  const canvas = document.getElementById('weight-chart');
+  if (!canvas) return;
+
+  const history = (getProfile().weightHistory ?? []).sort((a, b) => a.date.localeCompare(b.date));
+  if (history.length < 2) return;
+
+  const isDark    = document.documentElement.dataset.theme === 'dark';
+  const gridColor = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
+  const textColor = isDark ? '#606060' : '#999999';
+  const color     = isDark ? '#a78bfa' : '#7c3aed';   // púrpura
+  const bgColor   = isDark ? 'rgba(167,139,250,.1)' : 'rgba(124,58,237,.1)';
+
+  const labels = history.map(h => h.date.split('-').slice(1).reverse().join('/'));
+  const data   = history.map(h => h.weightKg);
+
+  if (_weightChart) _weightChart.destroy();
+  _weightChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label:                'Peso (kg)',
+        data,
+        borderColor:          color,
+        backgroundColor:      bgColor,
+        pointBackgroundColor: color,
+        pointBorderColor:     'transparent',
+        pointRadius:          4,
+        pointHoverRadius:     6,
+        fill:                 true,
+        tension:              0.3,
+        borderWidth:          2,
+      }],
+    },
+    options: {
+      responsive:          true,
+      maintainAspectRatio: false,
+      interaction:         { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: isDark ? '#242424' : '#ffffff',
+          borderColor:     isDark ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.1)',
+          borderWidth:     1,
+          titleColor:      isDark ? '#f2f2f2' : '#111111',
+          bodyColor:       isDark ? '#9a9a9a' : '#555555',
+          padding:         10,
+          callbacks: { label: ctx => ` ${ctx.parsed.y} kg` },
+        },
+      },
+      scales: {
+        x: {
+          grid:  { color: gridColor },
+          ticks: { color: textColor, font: { size: 11 } },
+        },
+        y: {
+          grid:        { color: gridColor },
+          ticks:       { color: textColor, font: { size: 11 }, callback: v => `${v} kg` },
+          beginAtZero: false,
+        },
+      },
+    },
+  });
+}
+
 function _destroyCharts() {
-  if (_chart)      { _chart.destroy();      _chart = null; }
-  if (_groupChart) { _groupChart.destroy(); _groupChart = null; }
+  if (_chart)       { _chart.destroy();       _chart = null; }
+  if (_groupChart)  { _groupChart.destroy();  _groupChart = null; }
+  if (_weightChart) { _weightChart.destroy(); _weightChart = null; }
 }
 
 // ── Events ─────────────────────────────────────────────────
@@ -537,6 +646,83 @@ function _bindEvents() {
 
   _container.addEventListener('click', _clickHandler);
   _container.addEventListener('input', _inputHandler);
+}
+
+// ── Tab: Logros ────────────────────────────────────────────
+
+function _logrosTabHTML() {
+  const allSessions   = getSessions();
+  const prs           = getPRs();
+  const prCount       = Object.keys(prs).length;
+  const totalVolume   = allSessions.reduce((sum, s) =>
+    sum + s.exercises.reduce((es, ex) =>
+      es + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0), 0);
+  const currentStreak = calcCurrentStreak(allSessions);
+  const maxStreak     = calcMaxStreak(allSessions);
+  const sessionCount  = allSessions.length;
+  const ctx           = { sessionCount, prCount, totalVolume, currentStreak, maxStreak };
+
+  const unlocked    = getAchievements();
+  const unlockedMap = new Map(unlocked.map(a => [a.id, a]));
+
+  const categories = ['sessions', 'streak', 'prs', 'volume'];
+
+  if (!allSessions.length) {
+    return `
+      <div class="empty-state">
+        <i data-lucide="award" style="width:48px;height:48px;color:var(--text-tertiary)"></i>
+        <h3>Sin logros todavía</h3>
+        <p>Completá tu primera sesión para comenzar a desbloquear logros.</p>
+      </div>
+    `;
+  }
+
+  return categories.map(cat => {
+    const defs = ACHIEVEMENT_DEFS.filter(d => d.category === cat);
+    return `
+      <div style="margin-bottom:var(--space-5)">
+        <div class="exercise-group-header" style="margin-bottom:var(--space-3)">${ACHIEVEMENT_CATEGORY_LABELS[cat]}</div>
+        <div class="achievements-grid">
+          ${defs.map(def => _achievementCardHTML(def, unlockedMap.get(def.id), ctx)).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function _achievementCardHTML(def, unlockData, ctx) {
+  const isUnlocked = !!unlockData;
+  const progress   = def.progress ? def.progress(ctx) : null;
+  const pct        = progress
+    ? Math.min(100, Math.round((progress.current / progress.target) * 100))
+    : 0;
+  const dateLabel  = unlockData?.unlockedAt
+    ? unlockData.unlockedAt.split('-').reverse().join('/')
+    : null;
+
+  return `
+    <div class="achievement-card${isUnlocked ? ' unlocked' : ' locked'}">
+      <div class="achievement-name">${def.name}</div>
+      <div class="achievement-desc">${isUnlocked ? def.description : def.hint}</div>
+      ${dateLabel ? `<div class="achievement-date">${dateLabel}</div>` : ''}
+      ${!isUnlocked && progress ? `
+        <div class="achievement-progress-bar">
+          <div style="width:${pct}%"></div>
+        </div>
+        <div class="achievement-progress-text">${_fmtProgress(progress.current, progress.target)}</div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function _fmtProgress(current, target) {
+  const cur = current >= 1000
+    ? `${(current / 1000).toFixed(1)}k`
+    : Math.min(current, target).toLocaleString('es-AR');
+  const tgt = target >= 1000
+    ? `${(target / 1000).toFixed(0)}k`
+    : target.toLocaleString('es-AR');
+  return `${cur} / ${tgt}`;
 }
 
 // ── Utils ──────────────────────────────────────────────────
@@ -636,8 +822,8 @@ function _calcStats(periodSessions, allSessions) {
     : [];
 
   // Rachas (siempre sobre todos los datos históricos)
-  const currentStreak = _calcCurrentStreak(allSessions);
-  const maxStreak     = _calcMaxStreak(allSessions);
+  const currentStreak = calcCurrentStreak(allSessions);
+  const maxStreak     = calcMaxStreak(allSessions);
 
   return { avgPerWeek, topDays, currentStreak, maxStreak };
 }
@@ -648,46 +834,6 @@ function _weekSpan(sessions) {
   const first = new Date(dates[0] + 'T00:00:00');
   const last  = new Date(dates[dates.length - 1] + 'T00:00:00');
   return Math.max(1, Math.round((last - first) / (7 * 86400000)) + 1);
-}
-
-function _calcCurrentStreak(sessions) {
-  const datesSet = new Set(sessions.map(s => s.date));
-  const today    = todayISO();
-  let streak = 0;
-  const d = new Date();
-
-  // Si hoy no tiene sesión, empezar desde ayer
-  if (!datesSet.has(today)) d.setDate(d.getDate() - 1);
-
-  while (true) {
-    const iso = _dateToISO(d);
-    if (datesSet.has(iso)) {
-      streak++;
-      d.setDate(d.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
-
-function _calcMaxStreak(sessions) {
-  if (!sessions.length) return 0;
-  const dates = [...new Set(sessions.map(s => s.date))].sort();
-  let maxStreak = 1, current = 1;
-
-  for (let i = 1; i < dates.length; i++) {
-    const prev = new Date(dates[i - 1] + 'T00:00:00');
-    const curr = new Date(dates[i] + 'T00:00:00');
-    const diff = Math.round((curr - prev) / 86400000);
-    if (diff === 1) {
-      current++;
-      if (current > maxStreak) maxStreak = current;
-    } else {
-      current = 1;
-    }
-  }
-  return maxStreak;
 }
 
 function _dateToISO(d) {

@@ -166,6 +166,33 @@
 .toast-info    { color: var(--text-primary); }
 .toast.leaving { animation: toast-out 200ms ease forwards; }
 
+/* Persistent toast with action button */
+.toast-persistent { align-items: flex-start; flex-wrap: wrap; gap: var(--space-2); }
+.toast-msg        { flex: 1; color: var(--text-primary); }
+.toast-action-btn {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  background: var(--accent-subtle);
+  color: var(--accent-primary);
+  border: 1px solid var(--accent-muted);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+.toast-action-btn:hover { background: var(--accent-muted); }
+.toast-close-btn {
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.toast-close-btn:hover { color: var(--text-secondary); }
+
 /* ── Modal sheets ────────────────────────────────────────── */
 .modal-header {
   display: flex;

@@ -9,6 +9,7 @@
 
 import {
   exportAllData, importAllData, exportSessionsCSV,
+  getProfile, saveProfile, addWeightEntry,
 } from '../store.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
@@ -46,6 +47,9 @@ function _render() {
     <div class="view">
       <h1 class="page-title">Configuración</h1>
       <p class="page-subtitle">Datos, backup y privacidad</p>
+
+      <!-- Perfil -->
+      ${_profileSectionHTML()}
 
       <!-- Aviso de privacidad -->
       <div class="settings-notice">
@@ -127,6 +131,10 @@ function _render() {
 // ── Events ─────────────────────────────────────────────────
 
 function _bindEvents() {
+  _container.querySelector('#save-profile-btn').addEventListener('click', _saveProfile);
+  _container.querySelector('#profile-weight').addEventListener('input', _updateMetricsDisplay);
+  _container.querySelector('#profile-height').addEventListener('input', _updateMetricsDisplay);
+  _container.querySelector('#profile-birthyear').addEventListener('input', _updateMetricsDisplay);
   _container.querySelector('#export-json-btn').addEventListener('click', _exportJSON);
   _container.querySelector('#export-csv-btn').addEventListener('click',  _exportCSV);
   _container.querySelector('#import-file-input').addEventListener('change', _handleImportFile);
@@ -134,6 +142,128 @@ function _bindEvents() {
 
   const installBtn = _container.querySelector('#install-app-btn');
   if (installBtn) installBtn.addEventListener('click', _handleInstall);
+}
+
+// ── Profile ────────────────────────────────────────────────
+
+function _profileSectionHTML() {
+  const p       = getProfile();
+  const last    = p.weightHistory?.slice(-1)[0];
+  const lastKg  = last?.weightKg ?? '';
+  const lastDate = last?.date
+    ? last.date.split('-').reverse().join('/')
+    : null;
+
+  return `
+    <div class="section-header" style="margin-top:var(--space-2)">
+      <span class="section-title">Perfil</span>
+    </div>
+    <div class="settings-card">
+      <div class="settings-item">
+        <div class="settings-item-info">
+          <div class="settings-item-title">Género</div>
+        </div>
+        <select class="input-field input-sm" id="profile-gender" style="width:auto;min-width:120px">
+          <option value=""       ${!p.gender                ? 'selected' : ''}>—</option>
+          <option value="male"   ${p.gender === 'male'   ? 'selected' : ''}>Masculino</option>
+          <option value="female" ${p.gender === 'female' ? 'selected' : ''}>Femenino</option>
+          <option value="other"  ${p.gender === 'other'  ? 'selected' : ''}>Otro</option>
+        </select>
+      </div>
+      <div class="settings-item settings-item-border">
+        <div class="settings-item-info">
+          <div class="settings-item-title">Año de nacimiento</div>
+        </div>
+        <input type="number" id="profile-birthyear" class="input-field input-sm"
+          value="${p.birthYear ?? ''}" placeholder="1990" min="1920" max="${new Date().getFullYear() - 10}"
+          style="width:80px;text-align:center">
+      </div>
+      <div class="settings-item settings-item-border">
+        <div class="settings-item-info">
+          <div class="settings-item-title">Altura</div>
+          <div class="settings-item-sub">En centímetros</div>
+        </div>
+        <input type="number" id="profile-height" class="input-field input-sm"
+          value="${p.heightCm ?? ''}" placeholder="170" min="100" max="250"
+          style="width:80px;text-align:center">
+      </div>
+      <div class="settings-item settings-item-border">
+        <div class="settings-item-info">
+          <div class="settings-item-title">Peso actual</div>
+          <div class="settings-item-sub">${lastDate ? `Último registro: ${lastDate}` : 'Sin registros aún'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--space-2)">
+          <input type="number" id="profile-weight" class="input-field input-sm"
+            value="${lastKg}" placeholder="70" min="30" max="300" step="0.1"
+            style="width:72px;text-align:center">
+          <span style="font-size:var(--text-sm);color:var(--text-tertiary)">kg</span>
+        </div>
+      </div>
+
+      <!-- Métricas calculadas -->
+      <div id="profile-metrics" class="profile-metrics">
+        ${_metricsHTML(p.heightCm, lastKg || null, p.birthYear)}
+      </div>
+
+      <div class="settings-item settings-item-border" style="justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" id="save-profile-btn">
+          <i data-lucide="save"></i> Guardar perfil
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function _metricsHTML(heightCm, weightKg, birthYear) {
+  const parts = [];
+
+  if (heightCm && weightKg) {
+    const hm  = heightCm / 100;
+    const bmi = (weightKg / (hm * hm)).toFixed(1);
+    const cat = bmi < 18.5 ? 'Bajo peso'
+              : bmi < 25   ? 'Normal'
+              : bmi < 30   ? 'Sobrepeso'
+              :               'Obesidad';
+    parts.push(`<div class="profile-metric"><span class="profile-metric-value">${bmi}</span><span class="profile-metric-label">IMC · ${cat}</span></div>`);
+  }
+
+  if (birthYear) {
+    const age = new Date().getFullYear() - parseInt(birthYear);
+    if (age > 0 && age < 120) {
+      parts.push(`<div class="profile-metric"><span class="profile-metric-value">${age}</span><span class="profile-metric-label">Años</span></div>`);
+    }
+  }
+
+  return parts.length
+    ? `<div class="profile-metrics-row">${parts.join('')}</div>`
+    : '';
+}
+
+function _updateMetricsDisplay() {
+  const heightCm  = parseFloat(_container.querySelector('#profile-height')?.value) || null;
+  const weightKg  = parseFloat(_container.querySelector('#profile-weight')?.value) || null;
+  const birthYear = _container.querySelector('#profile-birthyear')?.value || null;
+  const el = _container.querySelector('#profile-metrics');
+  if (el) el.innerHTML = _metricsHTML(heightCm, weightKg, birthYear);
+}
+
+function _saveProfile() {
+  const gender    = _container.querySelector('#profile-gender')?.value || null;
+  const birthYear = parseInt(_container.querySelector('#profile-birthyear')?.value) || null;
+  const heightCm  = parseFloat(_container.querySelector('#profile-height')?.value) || null;
+  const weightKg  = parseFloat(_container.querySelector('#profile-weight')?.value) || null;
+
+  saveProfile({ gender, birthYear, heightCm });
+
+  if (weightKg && weightKg > 0) {
+    addWeightEntry(weightKg);
+    // Actualizar la sub-línea del campo peso con la nueva fecha
+    const today = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const sub = _container.querySelector('#profile-weight')?.closest('.settings-item')?.querySelector('.settings-item-sub');
+    if (sub) sub.textContent = `Último registro: ${today}`;
+  }
+
+  showToast('Perfil guardado correctamente.', 'success');
 }
 
 // ── Export ─────────────────────────────────────────────────

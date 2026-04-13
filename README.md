@@ -26,7 +26,7 @@
 - Botón **Compartir** en cada tarjeta para enviar el resumen de la sesión
 - Eliminar sesiones individualmente
 
-### Progreso — 4 vistas analíticas
+### Progreso — 5 vistas analíticas
 
 #### Ejercicio
 - Selector de ejercicio con búsqueda instantánea
@@ -51,11 +51,33 @@
 - Racha máxima histórica
 - Días de la semana más frecuentes ("Entrenás más los martes y jueves")
 - Mini gráfico de barras con distribución por día (Dom → Sáb)
+- **Evolución de peso corporal** — gráfico de línea con el historial de peso registrado en el perfil (visible con 2+ entradas)
+
+#### Logros
+- Grilla de todos los logros posibles agrupados por categoría
+- Desbloqueados: nombre, descripción y fecha de desbloqueo en color
+- Bloqueados: en gris con la condición a cumplir como hint
+- Barra de progreso en logros numéricos (ej: 34/50 sesiones)
 
 ### Biblioteca de ejercicios
 - Ejercicios agrupados por categoría muscular con filtros
 - Creá y eliminá ejercicios custom persistidos en localStorage
 - Soporte para tipos: Fuerza, Cardio, Movilidad, Estiramiento
+
+### Perfil y métricas personales
+
+Completá tu perfil en **Config. → Perfil** para habilitar métricas avanzadas:
+
+- **IMC** — calculado en tiempo real a partir del peso y la altura, con categoría textual (Bajo peso / Normal / Sobrepeso / Obesidad)
+- **Edad** — derivada del año de nacimiento
+- **Calorías quemadas estimadas** — al finalizar cada sesión, usando MET según tipo de ejercicio (Fuerza: 5.0 · Cardio: 7.5 · Movilidad/Estiramiento: 2.5) y duración; visible en el toast de cierre y en cada tarjeta del historial
+- **1RM estimado (Epley)** — en la vista Ejercicio de Progreso, debajo del gráfico, muestra el mejor 1RM histórico calculado como `peso × (1 + reps / 30)`
+- **Evolución de peso corporal** — gráfico de línea en Estadísticas si hay 2+ registros de peso
+- **Notificación semanal** — si pasaron más de 7 días sin actualizar el peso, aparece una notificación con acceso directo al perfil (una vez por sesión de navegación)
+
+### Sistema de logros
+
+Replog desbloquea logros automáticamente al finalizar sesiones. Cada nuevo logro dispara un toast de celebración. Visualizalos en **Progreso → Logros**.
 
 ### Instalación como app nativa
 
@@ -70,6 +92,65 @@ Replog es una PWA instalable. Una vez instalada, aparece en la pantalla de inici
 - **Exportar CSV**: solo el historial de sesiones, para analizar en Excel o Sheets
 - **Importar**: restaurar un backup JSON con validación previa y confirmación
 - **Borrar datos**: limpiar todo el historial desde la zona de peligro
+
+---
+
+---
+
+## Perfil y métricas
+
+### Datos del perfil (Config. → Perfil)
+
+| Campo | Descripción |
+|---|---|
+| Género | Masculino / Femenino / Otro |
+| Año de nacimiento | Para calcular la edad |
+| Altura (cm) | Para el IMC |
+| Peso actual (kg) | Se guarda como historial con fecha; no reemplaza el anterior |
+
+### Métricas calculadas
+
+| Métrica | Fórmula |
+|---|---|
+| IMC | `peso / (altura_m)²` → categoría textual |
+| Edad | `año_actual − año_nacimiento` |
+| Calorías (por sesión) | `MET × peso_kg × duración_horas` (MET: Fuerza 5.0 · Cardio 7.5 · Movilidad 2.5) |
+| 1RM (Epley) | `peso × (1 + reps / 30)` — mejor set histórico de cada ejercicio |
+
+---
+
+## Logros
+
+Los logros se evalúan automáticamente al finalizar cada sesión. Nunca se repiten.
+
+### Consistencia
+| Logro | Condición |
+|---|---|
+| Primera sesión ✅ | Completar la primera sesión |
+| Comprometido 🎯 | 10 sesiones completadas |
+| Veterano 🥋 | 50 sesiones completadas |
+| Centenario 🎖️ | 100 sesiones completadas |
+
+### Rachas
+| Logro | Condición |
+|---|---|
+| En racha 🔥 | 3 días consecutivos con sesión |
+| Semana perfecta ⚡ | 7 días consecutivos |
+| Mes de hierro 🏅 | 30 días consecutivos |
+
+### Récords personales
+| Logro | Condición |
+|---|---|
+| Primer récord 🏆 | Primer PR registrado |
+| Máquina de PRs 💥 | 10 PRs distintos |
+| Leyenda del gym 👑 | 25 PRs distintos |
+
+### Volumen acumulado
+| Logro | Condición |
+|---|---|
+| Primera tonelada 💪 | 1.000 kg acumulados |
+| 10.000 kg 🚀 | 10.000 kg acumulados |
+| 100.000 kg 🌋 | 100.000 kg acumulados |
 
 ---
 
@@ -178,7 +259,8 @@ replog/
     ├── data/
     │   ├── exercises.js        # Definición de grupos musculares
     │   ├── freeExerciseDb.js   # Biblioteca de ejercicios externos
-    │   └── routineTemplates.js
+    │   ├── routineTemplates.js
+    │   └── achievements.js     # Definiciones de logros (14 logros en 4 categorías)
     ├── views/
     │   ├── today.js       # Sesión activa (timer, supersets, RPE, last ref, share)
     │   ├── history.js     # Historial de sesiones (share, PR badge)
@@ -200,6 +282,8 @@ replog/
 | `replog_exercises` | Ejercicios custom creados por el usuario |
 | `replog_settings` | Tema (dark/light), duración del timer de descanso |
 | `replog_prs` | Récords personales por ejercicio |
+| `replog_profile` | Perfil del usuario: género, año de nacimiento, altura, historial de peso |
+| `replog_achievements` | Logros desbloqueados con fecha |
 
 ---
 
