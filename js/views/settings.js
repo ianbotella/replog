@@ -10,6 +10,7 @@
 import {
   exportAllData, importAllData, exportSessionsCSV,
   getProfile, saveProfile, addWeightEntry,
+  getSettings, saveSettings,
 } from '../store.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
@@ -50,6 +51,9 @@ function _render() {
 
       <!-- Perfil -->
       ${_profileSectionHTML()}
+
+      <!-- Preferencias -->
+      ${_preferencesSectionHTML()}
 
       <!-- Aviso de privacidad -->
       <div class="settings-notice">
@@ -131,6 +135,14 @@ function _render() {
 // ── Events ─────────────────────────────────────────────────
 
 function _bindEvents() {
+  _container.querySelector('#weight-unit-chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const unit = chip.dataset.unit;
+    saveSettings({ weightUnit: unit });
+    _container.querySelectorAll('#weight-unit-chips .chip').forEach(c =>
+      c.classList.toggle('active', c.dataset.unit === unit));
+  });
   _container.querySelector('#save-profile-btn').addEventListener('click', _saveProfile);
   _container.querySelector('#profile-weight').addEventListener('input', _updateMetricsDisplay);
   _container.querySelector('#profile-height').addEventListener('input', _updateMetricsDisplay);
@@ -142,6 +154,30 @@ function _bindEvents() {
 
   const installBtn = _container.querySelector('#install-app-btn');
   if (installBtn) installBtn.addEventListener('click', _handleInstall);
+}
+
+// ── Preferences ────────────────────────────────────────────
+
+function _preferencesSectionHTML() {
+  const settings = getSettings();
+  const unit = settings.weightUnit ?? 'kg';
+  return `
+    <div class="section-header" style="margin-top:var(--space-5)">
+      <span class="section-title">Preferencias</span>
+    </div>
+    <div class="settings-card">
+      <div class="settings-item">
+        <div class="settings-item-info">
+          <div class="settings-item-title">Unidad de peso</div>
+          <div class="settings-item-sub">Unidad por defecto al registrar series</div>
+        </div>
+        <div class="chip-group" id="weight-unit-chips" style="flex-shrink:0">
+          <button class="chip${unit === 'kg' ? ' active' : ''}" data-unit="kg">kg</button>
+          <button class="chip${unit === 'lb' ? ' active' : ''}" data-unit="lb">lb</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // ── Profile ────────────────────────────────────────────────

@@ -17,7 +17,7 @@ import {
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
   getSettings, saveSettings, getLastExerciseSession, checkAndUpdatePRs,
   getProfile, calcEstimatedCalories, checkAndUpdateAchievements,
-  getCustomRoutines, getWeeklyPlan,
+  getCustomRoutines, getWeeklyPlan, resolveWeightKg,
 } from '../store.js';
 import {
   MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
@@ -40,6 +40,9 @@ let _restTimer = { active: false, remaining: 0, total: 0, paused: false, interva
 
 // Feature 3: modo RPE/RIR por índice de ejercicio (volátil, no persiste en LS)
 let _rpeState = {}; // { [exIdx]: 'off' | 'rpe' | 'rir' }
+
+// Unidad de peso por ejercicio: 'kg' | 'lb' | 'bw' (volátil, no persiste en LS)
+let _unitState = {}; // { [exIdx]: 'kg' | 'lb' | 'bw' }
 
 const _uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
@@ -202,8 +205,9 @@ function _customRoutineCardHTML(r, isSuggested = false) {
 }
 
 function _startFromCustomRoutine(routine) {
-  _session  = createSession(routine.muscleGroup ?? null);
-  _rpeState = {};
+  _session    = createSession(routine.muscleGroup ?? null);
+  _rpeState   = {};
+  _unitState  = {};
 
   for (const ex of routine.exercises) {
     const sessionEx = {
@@ -241,8 +245,9 @@ function _routineTemplateCardHTML(t, isSuggested = false) {
 
 async function _startFromTemplate(template) {
   const external = await fetchExternalExercises();
-  _session  = createSession();
-  _rpeState = {};
+  _session    = createSession();
+  _rpeState   = {};
+  _unitState  = {};
 
   for (const ex of template.exercises) {
     const apiEx    = external.find(e => e.id === ex.exerciseId);
@@ -348,6 +353,13 @@ function _exerciseBlockHTML(ex, idx) {
   const hasImgs = apiEx?.images?.length > 0;
   const rpeMode = _rpeState[idx] || 'off';
 
+  // Unidad activa: persiste en _unitState; se inicializa desde el primer set guardado o desde settings
+  if (_unitState[idx] === undefined) {
+    const storedUnit = ex.sets[0]?.weightUnit;
+    _unitState[idx] = storedUnit ?? getSettings().weightUnit ?? 'kg';
+  }
+  const unit = _unitState[idx];
+
   // Feature 4: referencia de última sesión
   const lastData = getLastExerciseSession(ex.exerciseId);
   const lastRef  = lastData ? _formatLastSession(lastData, type, metric) : null;
@@ -355,13 +367,24 @@ function _exerciseBlockHTML(ex, idx) {
   const emptyMsg = `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`;
   const setsHTML = ex.sets.length === 0
     ? emptyMsg
-    : _setsHeaderHTML(type, metric, rpeMode) +
-      ex.sets.map((set, si) => _setRowHTML(idx, set, si, type, metric, rpeMode)).join('');
+    : _setsHeaderHTML(type, metric, rpeMode, unit) +
+      ex.sets.map((set, si) => _setRowHTML(idx, set, si, type, metric, rpeMode, unit)).join('');
 
   const addLabel  = type === 'cardio' ? 'Agregar vuelta' : 'Agregar serie';
   const typeBadge = type !== 'strength'
     ? `<span class="badge badge-general" style="margin-left:var(--space-2)">${_typeBadgeLabel(type, metric)}</span>`
     : '';
+
+  // Chips de unidad (solo fuerza)
+  const unitChips = type === 'strength' ? `
+    <div class="chip-group" style="gap:2px">
+      <button class="chip unit-chip${unit === 'kg' ? ' active' : ''}" data-ex="${idx}" data-unit="kg"
+        style="padding:2px 7px;font-size:10px">kg</button>
+      <button class="chip unit-chip${unit === 'lb' ? ' active' : ''}" data-ex="${idx}" data-unit="lb"
+        style="padding:2px 7px;font-size:10px">lb</button>
+      <button class="chip unit-chip${unit === 'bw' ? ' active' : ''}" data-ex="${idx}" data-unit="bw"
+        style="padding:2px 7px;font-size:10px">PC</button>
+    </div>` : '';
 
   // Feature 3: botón RPE/RIR (solo fuerza)
   const rpeBtn = type === 'strength' ? `
@@ -403,13 +426,16 @@ function _exerciseBlockHTML(ex, idx) {
         <button class="btn btn-ghost btn-sm add-set-btn" data-ex="${idx}">
           <i data-lucide="plus"></i> ${addLabel}
         </button>
-        ${rpeBtn}
+        <div style="display:flex;align-items:center;gap:var(--space-2)">
+          ${unitChips}
+          ${rpeBtn}
+        </div>
       </div>
     </div>
   `;
 }
 
-function _setsHeaderHTML(type, metric, rpeMode = 'off') {
+function _setsHeaderHTML(type, metric, rpeMode = 'off', unit = 'kg') {
   if (type === 'cardio') {
     return `<div class="sets-header sets-header-cardio">
       <span>Vuelta</span><span>Tiempo (min)</span><span>km/h</span><span>Incl. %</span><span></span>
@@ -431,14 +457,15 @@ function _setsHeaderHTML(type, metric, rpeMode = 'off') {
     </div>`;
   }
   // Strength
+  const weightLabel = unit === 'bw' ? 'Peso corporal' : `Peso (${unit})`;
   const rpeCol   = rpeMode !== 'off' ? `<span>${rpeMode.toUpperCase()}</span>` : '';
   const colClass = rpeMode !== 'off' ? 'sets-header sets-header-rpe' : 'sets-header';
   return `<div class="${colClass}">
-    <span>Serie</span><span>Peso (kg)</span><span>Reps</span>${rpeCol}<span></span>
+    <span>Serie</span><span>${weightLabel}</span><span>Reps</span>${rpeCol}<span></span>
   </div>`;
 }
 
-function _setRowHTML(exIdx, set, setIdx, type, metric, rpeMode = 'off') {
+function _setRowHTML(exIdx, set, setIdx, type, metric, rpeMode = 'off', unit = 'kg') {
   const del = `<button class="set-delete-btn" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Eliminar serie"><i data-lucide="trash-2"></i></button>`;
   const n   = setIdx + 1;
 
@@ -468,7 +495,7 @@ function _setRowHTML(exIdx, set, setIdx, type, metric, rpeMode = 'off') {
       </div>`;
   }
 
-  // Strength — con columna RPE/RIR opcional
+  // Strength — con columna RPE/RIR opcional y soporte de unidades
   const rpeField = rpeMode === 'rir' ? 'rir' : 'rpe';
   const rpeMax   = rpeMode === 'rir' ? 5 : 10;
   const rpeMin   = rpeMode === 'rir' ? 0 : 1;
@@ -479,12 +506,18 @@ function _setRowHTML(exIdx, set, setIdx, type, metric, rpeMode = 'off') {
   ` : '';
   const rowClass = rpeMode !== 'off' ? 'set-row set-row-rpe' : 'set-row';
 
+  // BW: input deshabilitado
+  const weightInput = unit === 'bw'
+    ? `<input type="text" class="set-input" value="PC" disabled
+         style="color:var(--text-tertiary);text-align:center">`
+    : `<input type="number" class="set-input" data-field="weight" data-ex="${exIdx}" data-set="${setIdx}"
+         value="${set.weight || ''}" placeholder="0" min="0" step="${unit === 'lb' ? '1' : '0.5'}">`;
+
   return `
     <div class="${rowClass}" data-ex="${exIdx}" data-set="${setIdx}">
       <span class="set-number">${n}</span>
       <div class="set-input-wrap">
-        <input type="number" class="set-input" data-field="weight" data-ex="${exIdx}" data-set="${setIdx}"
-          value="${set.weight || ''}" placeholder="0" min="0" step="0.5">
+        ${weightInput}
       </div>
       <div class="set-input-wrap">
         <input type="number" class="set-input" data-field="reps" data-ex="${exIdx}" data-set="${setIdx}"
@@ -533,14 +566,14 @@ function _formatLastSession(lastData, type, metric) {
   const validSets = sets.filter(s => s.reps > 0);
   if (!validSets.length) return null;
 
-  const maxWeight = Math.max(...validSets.map(s => s.weight || 0));
-  const allSameR  = validSets.every(s => s.reps === validSets[0].reps);
-  const setsStr   = allSameR
+  const maxWeightKg = Math.max(...validSets.map(s => resolveWeightKg(s)));
+  const allSameR    = validSets.every(s => s.reps === validSets[0].reps);
+  const setsStr     = allSameR
     ? `${validSets.length} × ${validSets[0].reps}`
     : validSets.map(s => s.reps).join('/') + ' reps';
 
-  return maxWeight > 0
-    ? `Última: ${setsStr} @ ${maxWeight} kg`
+  return maxWeightKg > 0
+    ? `Última: ${setsStr} @ ${maxWeightKg % 1 === 0 ? maxWeightKg : maxWeightKg.toFixed(1)} kg`
     : `Última: ${setsStr}`;
 }
 
@@ -675,6 +708,13 @@ function _handleExerciseListClick(e) {
     return;
   }
 
+  // Cambio de unidad por ejercicio
+  const unitChip = e.target.closest('.unit-chip');
+  if (unitChip) {
+    _changeExerciseUnit(parseInt(unitChip.dataset.ex, 10), unitChip.dataset.unit);
+    return;
+  }
+
   // RPE / RIR toggle: off → rpe → rir → off
   const rpeToggleBtn = e.target.closest('.rpe-toggle-btn');
   if (rpeToggleBtn) {
@@ -703,19 +743,31 @@ function _handleExerciseListClick(e) {
 
 function _handleSetInputChange(e) {
   const input = e.target.closest('.set-input');
-  if (!input) return;
+  if (!input || !input.dataset.field) return;
   const exIdx  = parseInt(input.dataset.ex, 10);
   const setIdx = parseInt(input.dataset.set, 10);
   const value  = parseFloat(input.value);
-  _session.exercises[exIdx].sets[setIdx][input.dataset.field] = isNaN(value) ? 0 : value;
+  const set    = _session.exercises[exIdx].sets[setIdx];
+
+  set[input.dataset.field] = isNaN(value) ? 0 : value;
+
+  // Al cambiar el peso, actualizar weightKg y weightUnit para cálculos en kg
+  if (input.dataset.field === 'weight') {
+    const unit     = _unitState[exIdx] ?? getSettings().weightUnit ?? 'kg';
+    const w        = isNaN(value) ? 0 : value;
+    set.weightUnit = unit;
+    set.weightKg   = unit === 'lb' ? w / 2.2046 : w;
+  }
+
   saveSession(_session);
 }
 
 // ── Acciones de sesión ─────────────────────────────────────
 
 function _startFreeSession() {
-  _session  = createSession();
-  _rpeState = {};
+  _session    = createSession();
+  _rpeState   = {};
+  _unitState  = {};
   _render();
 }
 
@@ -746,8 +798,9 @@ function _finishSession() {
   // Limpiar COMPLETAMENTE el estado de la sesión activa
   _stopRestTimer();
   if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
-  _session  = null;
-  _rpeState = {};
+  _session    = null;
+  _rpeState   = {};
+  _unitState  = {};
   _render(); // Mostrar pantalla de inicio inmediatamente
 
   // Toast inicial (aparece sobre la pantalla de inicio ya limpia)
@@ -784,8 +837,9 @@ function _cancelSession() {
   if (!confirm('¿Cancelar la sesión de hoy? Se perderán los datos.')) return;
   import('../store.js').then(({ deleteSession }) => {
     deleteSession(_session.id);
-    _session  = null;
-    _rpeState = {};
+    _session    = null;
+    _rpeState   = {};
+    _unitState  = {};
     if (_timerInterval) clearInterval(_timerInterval);
     _stopRestTimer();
     _render();
@@ -938,6 +992,39 @@ function _deleteExercise(idx) {
   _reRenderExercisesList();
 }
 
+function _changeExerciseUnit(exIdx, newUnit) {
+  const oldUnit = _unitState[exIdx] ?? 'kg';
+  if (oldUnit === newUnit) return;
+
+  const ex = _session.exercises[exIdx];
+
+  for (const set of ex.sets) {
+    if (newUnit === 'bw') {
+      const profile    = getProfile();
+      const lastWeight = profile?.weightHistory?.slice(-1)[0]?.weightKg ?? null;
+      set.weight     = lastWeight ?? 0;
+      set.weightUnit = 'bw';
+      set.weightKg   = lastWeight ?? 0;
+    } else if (oldUnit === 'bw') {
+      set.weight     = 0;
+      set.weightUnit = newUnit;
+      set.weightKg   = 0;
+    } else if (oldUnit === 'kg' && newUnit === 'lb') {
+      set.weight     = Math.round(set.weight * 2.2046 * 4) / 4;
+      set.weightUnit = 'lb';
+      set.weightKg   = set.weight / 2.2046;
+    } else if (oldUnit === 'lb' && newUnit === 'kg') {
+      set.weight     = Math.round(set.weight / 2.2046 * 4) / 4;
+      set.weightUnit = 'kg';
+      set.weightKg   = set.weight;
+    }
+  }
+
+  _unitState[exIdx] = newUnit;
+  saveSession(_session);
+  _reRenderExercisesList();
+}
+
 function _addSet(exIdx) {
   const ex     = _session.exercises[exIdx];
   const libEx  = findExerciseById(ex.exerciseId, getCustomExercises());
@@ -955,7 +1042,15 @@ function _addSet(exIdx) {
   } else if (type === 'stretch') {
     newSet = { durationSec: last?.durationSec ?? 30 };
   } else {
-    newSet = { weight: last?.weight ?? 0, reps: last?.reps ?? 0 };
+    const unit = _unitState[exIdx] ?? getSettings().weightUnit ?? 'kg';
+    if (unit === 'bw') {
+      const profile    = getProfile();
+      const lastWeight = profile?.weightHistory?.slice(-1)[0]?.weightKg ?? null;
+      if (!lastWeight) showToast('Registrá tu peso en Configuración para usar Peso Corporal.', 'info');
+      newSet = { weight: lastWeight ?? 0, weightUnit: 'bw', weightKg: lastWeight ?? 0, reps: last?.reps ?? 0 };
+    } else {
+      newSet = { weight: last?.weight ?? 0, weightUnit: unit, weightKg: unit === 'lb' ? (last?.weight ?? 0) / 2.2046 : (last?.weight ?? 0), reps: last?.reps ?? 0 };
+    }
   }
 
   ex.sets.push(newSet);
