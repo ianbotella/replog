@@ -11,7 +11,7 @@
 import {
   getExerciseHistory, getSessions, getCustomExercises, getPRs,
   getProfile, getBestOneRM, getAchievements,
-  calcCurrentStreak, calcMaxStreak,
+  calcCurrentStreak, calcMaxStreak, calcTotalVolume,
 } from '../store.js';
 import { MUSCLE_GROUPS } from '../data/exercises.js';
 import { ACHIEVEMENT_DEFS, ACHIEVEMENT_CATEGORY_LABELS } from '../data/achievements.js';
@@ -61,9 +61,7 @@ function _render() {
   _destroyCharts();
 
   const sessions  = getSessions();
-  const totalVol  = sessions.reduce((sum, s) =>
-    sum + s.exercises.reduce((es, ex) =>
-      es + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0), 0);
+  const totalVol  = calcTotalVolume(sessions);
   const totalSets = sessions.reduce((sum, s) =>
     sum + s.exercises.reduce((es, ex) => es + ex.sets.length, 0), 0);
 
@@ -654,9 +652,7 @@ function _logrosTabHTML() {
   const allSessions   = getSessions();
   const prs           = getPRs();
   const prCount       = Object.keys(prs).length;
-  const totalVolume   = allSessions.reduce((sum, s) =>
-    sum + s.exercises.reduce((es, ex) =>
-      es + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0), 0);
+  const totalVolume   = calcTotalVolume(allSessions);
   const currentStreak = calcCurrentStreak(allSessions);
   const maxStreak     = calcMaxStreak(allSessions);
   const sessionCount  = allSessions.length;

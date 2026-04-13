@@ -77,6 +77,39 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+// ── Volume utilities ────────────────────────────────────────
+
+/**
+ * Suma weight × reps de un array de series.
+ * Filtra explícitamente los sets sin weight/reps válidos
+ * (sets de cardio, movilidad o estiramiento tienen weight = undefined / 0).
+ * @param {Array} sets
+ * @returns {number}
+ */
+export function calcSetsVolume(sets = []) {
+  return sets
+    .filter(s => s.weight > 0 && s.reps > 0)
+    .reduce((acc, s) => acc + s.weight * s.reps, 0);
+}
+
+/**
+ * Calcula el volumen total de una sesión (suma de todos sus ejercicios).
+ * @param {object} session
+ * @returns {number}
+ */
+export function calcSessionVolume(session) {
+  return session.exercises.reduce((acc, ex) => acc + calcSetsVolume(ex.sets), 0);
+}
+
+/**
+ * Calcula el volumen histórico total de un array de sesiones.
+ * @param {Array} sessions
+ * @returns {number}
+ */
+export function calcTotalVolume(sessions = []) {
+  return sessions.reduce((acc, s) => acc + calcSessionVolume(s), 0);
+}
+
 // ── Settings ───────────────────────────────────────────────
 
 export function getSettings() {
@@ -168,7 +201,7 @@ export function getExerciseHistory(exerciseId) {
     if (validSets.length === 0) continue;
 
     const maxWeight    = Math.max(...validSets.map(s => s.weight));
-    const totalVolume  = validSets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+    const totalVolume  = calcSetsVolume(validSets);
     const totalReps    = validSets.reduce((sum, s) => sum + s.reps, 0);
 
     result.push({
@@ -345,9 +378,7 @@ export function checkAndUpdateAchievements() {
   const allSessions  = getSessions();
   const prs          = getPRs();
   const prCount      = Object.keys(prs).length;
-  const totalVolume  = allSessions.reduce((sum, s) =>
-    sum + s.exercises.reduce((es, ex) =>
-      es + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0), 0);
+  const totalVolume   = calcTotalVolume(allSessions);
   const currentStreak = calcCurrentStreak(allSessions);
   const maxStreak     = calcMaxStreak(allSessions);
   const sessionCount  = allSessions.length;
@@ -540,8 +571,7 @@ export function exportSessionsCSV() {
     .map(s => {
       const exCount  = s.exercises.length;
       const setCount = s.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
-      const vol      = s.exercises.reduce((t, ex) =>
-        t + ex.sets.reduce((ss, set) => ss + (set.weight || 0) * (set.reps || 0), 0), 0);
+      const vol      = calcSessionVolume(s);
       const notes    = (s.notes || '').replace(/"/g, '""');
       return `${s.date},${s.muscleGroup ?? ''},${s.durationMin ?? 0},${exCount},${setCount},${vol},"${notes}"`;
     });
