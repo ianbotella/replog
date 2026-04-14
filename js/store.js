@@ -384,18 +384,39 @@ export function getAchievements() {
 /**
  * Evalúa todos los logros contra el estado actual de los datos.
  * Guarda los nuevos logros desbloqueados y devuelve sus definiciones.
+ *
+ * @param {object|null} session — sesión recién finalizada (para calcular sessionVolume)
  * @returns {Array} — definiciones de logros recién desbloqueados
  */
-export function checkAndUpdateAchievements() {
-  const allSessions  = getSessions();
-  const prs          = getPRs();
-  const prCount      = Object.keys(prs).length;
-  const totalVolume   = calcTotalVolume(allSessions);
+export function checkAndUpdateAchievements(session = null) {
+  const allSessions   = getSessions();
+  const prs           = getPRs();
   const currentStreak = calcCurrentStreak(allSessions);
   const maxStreak     = calcMaxStreak(allSessions);
   const sessionCount  = allSessions.length;
 
-  const ctx = { sessionCount, prCount, totalVolume, currentStreak, maxStreak };
+  // Métricas de PRs: solo cuentan mejoras sobre registros previos
+  const prValues          = Object.values(prs);
+  const totalImproved     = prValues.reduce((sum, p) => sum + (p.improvedCount ?? 0), 0);
+  const exercisesImproved = prValues.filter(p => (p.improvedCount ?? 0) >= 1).length;
+  const prDoubleUnlocked  = prValues.some(p => {
+    const fw = p.firstWeight ?? p.weight;
+    return fw > 0 && p.weight >= fw * 2;
+  });
+
+  // Volumen de la sesión recién finalizada (0 cuando se llama desde progress.js)
+  const sessionVolume = session ? calcSessionVolume(session) : 0;
+
+  const ctx = {
+    sessionCount,
+    currentStreak,
+    maxStreak,
+    bestStreak: Math.max(currentStreak, maxStreak),
+    totalImproved,
+    exercisesImproved,
+    prDoubleUnlocked,
+    sessionVolume,
+  };
 
   const unlocked    = getAchievements();
   const unlockedIds = new Set(unlocked.map(a => a.id));
@@ -412,6 +433,19 @@ export function checkAndUpdateAchievements() {
 
   write(KEYS.ACHIEVEMENTS, unlocked);
   return newOnes;
+}
+
+/**
+ * Elimina de replog_achievements cualquier entrada cuyo id ya no existe
+ * en las definiciones actuales. Se ejecuta una sola vez al cargar la app.
+ */
+export function migrateAchievements() {
+  const validIds = new Set(ACHIEVEMENT_DEFS.map(d => d.id));
+  const current  = getAchievements();
+  const migrated = current.filter(a => validIds.has(a.id));
+  if (migrated.length !== current.length) {
+    write(KEYS.ACHIEVEMENTS, migrated);
+  }
 }
 
 // ── Streak helpers (exported for reuse en progress.js) ─────
@@ -604,6 +638,15 @@ export function getPRs() {
 /**
  * Analiza una sesión recién guardada, actualiza los PRs si corresponde,
  * y devuelve la lista de nuevos PRs detectados en esta sesión.
+ *
+ * Estructura actualizada de cada entrada en replog_prs:
+ *   { exerciseId, name, weight, date, firstWeight, improvedCount }
+ *
+ *   firstWeight   — primer peso registrado histórico (nunca se modifica)
+ *   improvedCount — veces que se superó el PR previo (empieza en 0, sube solo al superar)
+ *
+ * Retrocompatibilidad: entradas sin firstWeight/improvedCount se inicializan en este método.
+ *
  * @param {object} session
  * @returns {Array<{exerciseId, name, weight}>}
  */
@@ -618,14 +661,36 @@ export function checkAndUpdatePRs(session) {
     const maxWeight = Math.max(...validSets.map(s => resolveWeightKg(s)));
     const current   = prs[ex.exerciseId];
 
-    if (!current || maxWeight > current.weight) {
+    if (!current) {
+      // Primera vez que se registra este ejercicio
       prs[ex.exerciseId] = {
-        exerciseId: ex.exerciseId,
-        name:       ex.name,
-        weight:     maxWeight,
-        date:       session.date,
+        exerciseId:    ex.exerciseId,
+        name:          ex.name,
+        weight:        maxWeight,
+        date:          session.date,
+        firstWeight:   maxWeight,
+        improvedCount: 0,
       };
       newPRs.push({ exerciseId: ex.exerciseId, name: ex.name, weight: maxWeight });
+    } else if (maxWeight > current.weight) {
+      // Nuevo PR — retrocompat: inicializar firstWeight si no existe
+      const firstWeight    = current.firstWeight ?? current.weight;
+      const improvedCount  = (current.improvedCount ?? 0) + 1;
+      prs[ex.exerciseId]   = {
+        ...current,
+        weight:        maxWeight,
+        date:          session.date,
+        firstWeight,
+        improvedCount,
+      };
+      newPRs.push({ exerciseId: ex.exerciseId, name: ex.name, weight: maxWeight });
+    } else if (current.firstWeight === undefined) {
+      // Retrocompat: inicializar campos en entradas existentes sin mejora en esta sesión
+      prs[ex.exerciseId] = {
+        ...current,
+        firstWeight:   current.weight,
+        improvedCount: 0,
+      };
     }
   }
 

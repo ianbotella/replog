@@ -793,7 +793,7 @@ function _finishSession() {
 
   // PRs y logros — evaluados antes de limpiar el estado
   const newPRs          = checkAndUpdatePRs(_session);
-  const newAchievements = checkAndUpdateAchievements();
+  const newAchievements = checkAndUpdateAchievements(_session);
 
   // Limpiar COMPLETAMENTE el estado de la sesión activa
   _stopRestTimer();

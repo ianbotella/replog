@@ -651,17 +651,33 @@ function _bindEvents() {
 function _logrosTabHTML() {
   const allSessions   = getSessions();
   const prs           = getPRs();
-  const prCount       = Object.keys(prs).length;
-  const totalVolume   = calcTotalVolume(allSessions);
   const currentStreak = calcCurrentStreak(allSessions);
   const maxStreak     = calcMaxStreak(allSessions);
   const sessionCount  = allSessions.length;
-  const ctx           = { sessionCount, prCount, totalVolume, currentStreak, maxStreak };
+
+  const prValues          = Object.values(prs);
+  const totalImproved     = prValues.reduce((sum, p) => sum + (p.improvedCount ?? 0), 0);
+  const exercisesImproved = prValues.filter(p => (p.improvedCount ?? 0) >= 1).length;
+  const prDoubleUnlocked  = prValues.some(p => {
+    const fw = p.firstWeight ?? p.weight;
+    return fw > 0 && p.weight >= fw * 2;
+  });
+
+  const ctx = {
+    sessionCount,
+    currentStreak,
+    maxStreak,
+    bestStreak: Math.max(currentStreak, maxStreak),
+    totalImproved,
+    exercisesImproved,
+    prDoubleUnlocked,
+    sessionVolume: 0,
+  };
 
   const unlocked    = getAchievements();
   const unlockedMap = new Map(unlocked.map(a => [a.id, a]));
 
-  const categories = ['sessions', 'streak', 'prs', 'volume'];
+  const categories = ['sessions', 'streak', 'prs', 'session_volume'];
 
   if (!allSessions.length) {
     return `

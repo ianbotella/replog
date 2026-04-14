@@ -10,7 +10,7 @@ import { ProgressView }  from './views/progress.js';
 import { ExercisesView } from './views/exercises.js';
 import { SettingsView }  from './views/settings.js';
 import { PlanningView }  from './views/planning.js';
-import { getSettings, saveSettings, needsWeightUpdate } from './store.js';
+import { getSettings, saveSettings, needsWeightUpdate, migrateAchievements } from './store.js';
 import { initPWA } from './pwa.js';
 import { showActionToast } from './components/toast.js';
 
@@ -23,7 +23,10 @@ function init() {
   // 2. Aplicar tema guardado
   applyTheme(getSettings().theme);
 
-  // 3. Registrar vistas en el router
+  // 3. Migrar logros obsoletos (ids que ya no existen en las definiciones actuales)
+  migrateAchievements();
+
+  // 4. Registrar vistas en el router
   router
     .register('today',     TodayView)
     .register('history',   HistoryView)
@@ -32,20 +35,20 @@ function init() {
     .register('settings',  SettingsView)
     .register('planning',  PlanningView);
 
-  // 4. Iniciar router (renderiza la vista actual)
+  // 5. Iniciar router (renderiza la vista actual)
   const container = document.getElementById('view-container');
   router.init(container);
 
-  // 5. Toggle de tema
+  // 6. Toggle de tema
   document.getElementById('theme-toggle')
     .addEventListener('click', toggleTheme);
 
-  // 6. Si no hay hash, navegar a /today
+  // 7. Si no hay hash, navegar a /today
   if (!window.location.hash) {
     router.navigate('#/today');
   }
 
-  // 7. Notificación semanal de peso (una vez por sesión de navegación)
+  // 8. Notificación semanal de peso (una vez por sesión de navegación)
   _maybeShowWeightNotification();
 }
 
