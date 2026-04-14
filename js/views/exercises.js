@@ -6,6 +6,7 @@
 
 import {
   getCustomExercises, saveCustomExercise, deleteCustomExercise,
+  getExerciseNote, saveExerciseNote, deleteExerciseNote,
 } from '../store.js';
 import { MUSCLE_GROUPS, GENERAL_GROUP } from '../data/exercises.js';
 import { fetchExternalExercises, IMG_BASE_URL } from '../data/freeExerciseDb.js';
@@ -157,6 +158,7 @@ function _exerciseItemHTML(ex) {
     ? GENERAL_GROUP
     : MUSCLE_GROUPS.find(g => g.id === ex.muscleGroup);
   const hasImages = ex.external && ex.images?.length > 0;
+  const hasNote   = !!getExerciseNote(ex.id);
 
   let metaText = '';
   if (ex.custom) {
@@ -178,6 +180,11 @@ function _exerciseItemHTML(ex) {
       <div class="exercise-item-actions">
         ${hasImages ? `<i data-lucide="image" style="width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0"></i>` : ''}
         <span class="badge ${group?.badgeClass ?? 'badge-neutral'}">${ex.category}</span>
+        <button class="icon-btn note-btn" data-id="${ex.id}"
+          data-is-custom="${ex.custom ? 'true' : 'false'}" aria-label="Nota del ejercicio"
+          title="${hasNote ? 'Editar nota' : 'Agregar nota'}">
+          <i data-lucide="notebook-pen" style="width:14px;height:14px;color:${hasNote ? 'var(--accent-primary)' : 'var(--text-tertiary)'}"></i>
+        </button>
         ${ex.custom ? `
           <button class="icon-btn delete-ex-btn" data-id="${ex.id}" aria-label="Eliminar">
             <i data-lucide="trash-2"></i>
@@ -213,11 +220,22 @@ function _bindEvents() {
   });
 
   _container.addEventListener('click', e => {
+    // Nota del ejercicio
+    const noteBtn = e.target.closest('.note-btn');
+    if (noteBtn) {
+      e.stopPropagation();
+      const custom = getCustomExercises();
+      const all    = [...custom, ..._extExercises];
+      const ex     = all.find(ex => ex.id === noteBtn.dataset.id);
+      if (ex) _openNoteModal(ex);
+      return;
+    }
+
     // Eliminar ejercicio custom
-    const btn = e.target.closest('.delete-ex-btn');
-    if (btn) {
+    const deleteBtn = e.target.closest('.delete-ex-btn');
+    if (deleteBtn) {
       if (!confirm('¿Eliminar este ejercicio personalizado?')) return;
-      deleteCustomExercise(btn.dataset.id);
+      deleteCustomExercise(deleteBtn.dataset.id);
       showToast('Ejercicio eliminado.', 'info');
       _reRenderList();
       return;
@@ -381,4 +399,77 @@ function _openAddModal() {
   });
 
   body.querySelector('#new-ex-name').focus();
+}
+
+// ── Modal nota personal ────────────────────────────────────
+
+function _openNoteModal(ex) {
+  const existingNote = getExerciseNote(ex.id);
+  const isCustom     = !!ex.custom;
+  const MAX_CHARS    = 300;
+
+  const body = openModal({
+    title: ex.name,
+    body: `
+      <div class="form-group">
+        <label class="label">Nota personal</label>
+        <textarea id="note-textarea" class="input-field notes-area"
+          placeholder="Cues técnicos, recordatorios, configuración de máquina..."
+          maxlength="${MAX_CHARS}"
+          style="min-height:100px;resize:none">${existingNote ?? ''}</textarea>
+        <div style="text-align:right;font-size:var(--text-xs);color:var(--text-tertiary);margin-top:var(--space-1)">
+          <span id="note-char-count">${(existingNote ?? '').length}</span>/${MAX_CHARS}
+        </div>
+      </div>
+    `,
+    footer: `
+      <div style="display:flex;gap:var(--space-3);width:100%">
+        ${existingNote ? `
+          <button class="btn btn-danger btn-sm" id="note-delete-btn" style="flex-shrink:0">
+            <i data-lucide="trash-2"></i> Eliminar
+          </button>
+        ` : ''}
+        <button class="btn btn-secondary" id="note-cancel-btn" style="flex:1">Cancelar</button>
+        <button class="btn btn-primary" id="note-save-btn" style="flex:2">
+          <i data-lucide="save"></i> Guardar nota
+        </button>
+      </div>
+    `,
+  });
+
+  const modalEl  = body.closest('.modal-container');
+  const textarea = body.querySelector('#note-textarea');
+  const counter  = body.querySelector('#note-char-count');
+
+  textarea.addEventListener('input', () => {
+    counter.textContent = textarea.value.length;
+  });
+
+  modalEl.querySelector('#note-cancel-btn').addEventListener('click', closeModal);
+
+  modalEl.querySelector('#note-save-btn').addEventListener('click', () => {
+    const newNote = textarea.value.trim();
+    if (!newNote) {
+      showToast('Escribí algo antes de guardar.', 'danger');
+      return;
+    }
+    saveExerciseNote(ex.id, newNote, isCustom);
+    closeModal();
+    showToast('Nota guardada.', 'success');
+    _reRenderList();
+  });
+
+  const deleteBtn = modalEl.querySelector('#note-delete-btn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => {
+      if (!confirm('¿Eliminar la nota de este ejercicio?')) return;
+      deleteExerciseNote(ex.id, isCustom);
+      closeModal();
+      showToast('Nota eliminada.', 'info');
+      _reRenderList();
+    });
+  }
+
+  if (window.lucide) window.lucide.createIcons({ nodes: [modalEl] });
+  textarea.focus();
 }

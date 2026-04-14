@@ -11,7 +11,7 @@
 // postMessage para mostrar el toast "Nueva versión disponible".
 // ─────────────────────────────────────────────────────────────
 
-const CACHE_NAME = 'replog-v9';
+const CACHE_NAME = 'replog-v10';
 
 // Flag: true si había un SW activo antes → es una actualización, no la primera instalación.
 let _isUpdate = false;

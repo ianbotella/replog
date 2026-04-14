@@ -46,14 +46,15 @@
  */
 
 const KEYS = {
-  SESSIONS:      'replog_sessions',
-  EXERCISES:     'replog_exercises',
-  SETTINGS:      'replog_settings',
-  PRS:           'replog_prs',
-  PROFILE:       'replog_profile',
-  ACHIEVEMENTS:  'replog_achievements',
-  ROUTINES:      'replog_routines',
-  PLAN:          'replog_plan',
+  SESSIONS:        'replog_sessions',
+  EXERCISES:       'replog_exercises',
+  SETTINGS:        'replog_settings',
+  PRS:             'replog_prs',
+  PROFILE:         'replog_profile',
+  ACHIEVEMENTS:    'replog_achievements',
+  ROUTINES:        'replog_routines',
+  PLAN:            'replog_plan',
+  EXERCISE_NOTES:  'replog_exercise_notes',
 };
 
 import { ACHIEVEMENT_DEFS } from './data/achievements.js';
@@ -245,6 +246,64 @@ export function saveCustomExercise(exercise) {
 export function deleteCustomExercise(id) {
   const exercises = getCustomExercises().filter(e => e.id !== id);
   write(KEYS.EXERCISES, exercises);
+}
+
+// ── Exercise Notes ─────────────────────────────────────────
+
+/**
+ * Obtiene la nota personal de un ejercicio.
+ * Para ejercicios custom: lee el campo `notes` del objeto en replog_exercises.
+ * Para ejercicios externos: lee de replog_exercise_notes, indexado por ID.
+ * @param {string} exerciseId
+ * @returns {string|null}
+ */
+export function getExerciseNote(exerciseId) {
+  const custom = getCustomExercises().find(e => e.id === exerciseId);
+  if (custom) return custom.notes || null;
+  const notes = read(KEYS.EXERCISE_NOTES, {});
+  return notes[exerciseId] || null;
+}
+
+/**
+ * Guarda la nota personal de un ejercicio.
+ * @param {string} exerciseId
+ * @param {string} note
+ * @param {boolean} isCustom
+ */
+export function saveExerciseNote(exerciseId, note, isCustom = false) {
+  if (isCustom) {
+    const exercises = getCustomExercises();
+    const idx = exercises.findIndex(e => e.id === exerciseId);
+    if (idx >= 0) {
+      exercises[idx] = { ...exercises[idx], notes: note };
+      write(KEYS.EXERCISES, exercises);
+    }
+  } else {
+    const notes = read(KEYS.EXERCISE_NOTES, {});
+    notes[exerciseId] = note;
+    write(KEYS.EXERCISE_NOTES, notes);
+  }
+}
+
+/**
+ * Elimina la nota personal de un ejercicio.
+ * @param {string} exerciseId
+ * @param {boolean} isCustom
+ */
+export function deleteExerciseNote(exerciseId, isCustom = false) {
+  if (isCustom) {
+    const exercises = getCustomExercises();
+    const idx = exercises.findIndex(e => e.id === exerciseId);
+    if (idx >= 0) {
+      const { notes: _removed, ...rest } = exercises[idx];
+      exercises[idx] = rest;
+      write(KEYS.EXERCISES, exercises);
+    }
+  } else {
+    const notes = read(KEYS.EXERCISE_NOTES, {});
+    delete notes[exerciseId];
+    write(KEYS.EXERCISE_NOTES, notes);
+  }
 }
 
 /**
@@ -573,16 +632,17 @@ const BACKUP_VERSION = 1;
  */
 export function exportAllData() {
   return {
-    version:      BACKUP_VERSION,
-    exportedAt:   new Date().toISOString(),
-    sessions:     read(KEYS.SESSIONS,     []),
-    exercises:    read(KEYS.EXERCISES,    []),
-    settings:     read(KEYS.SETTINGS,     {}),
-    prs:          read(KEYS.PRS,          {}),
-    profile:      read(KEYS.PROFILE,      { weightHistory: [] }),
-    achievements: read(KEYS.ACHIEVEMENTS, []),
-    routines:     read(KEYS.ROUTINES,     []),
-    plan:         read(KEYS.PLAN,         {}),
+    version:       BACKUP_VERSION,
+    exportedAt:    new Date().toISOString(),
+    sessions:      read(KEYS.SESSIONS,        []),
+    exercises:     read(KEYS.EXERCISES,       []),
+    settings:      read(KEYS.SETTINGS,        {}),
+    prs:           read(KEYS.PRS,             {}),
+    profile:       read(KEYS.PROFILE,         { weightHistory: [] }),
+    achievements:  read(KEYS.ACHIEVEMENTS,    []),
+    routines:      read(KEYS.ROUTINES,        []),
+    plan:          read(KEYS.PLAN,            {}),
+    exerciseNotes: read(KEYS.EXERCISE_NOTES,  {}),
   };
 }
 
@@ -594,14 +654,15 @@ export function importAllData(data) {
   if (!data || typeof data !== 'object') throw new Error('Archivo inválido.');
   if (!Array.isArray(data.sessions))     throw new Error('El archivo no contiene sesiones válidas.');
 
-  write(KEYS.SESSIONS,     data.sessions     ?? []);
-  write(KEYS.EXERCISES,    data.exercises    ?? []);
-  write(KEYS.SETTINGS,     data.settings     ?? {});
-  write(KEYS.PRS,          data.prs          ?? {});
-  write(KEYS.PROFILE,      data.profile      ?? { weightHistory: [] });
-  write(KEYS.ACHIEVEMENTS, data.achievements ?? []);
-  write(KEYS.ROUTINES,     data.routines     ?? []);
-  write(KEYS.PLAN,         data.plan         ?? {});
+  write(KEYS.SESSIONS,        data.sessions       ?? []);
+  write(KEYS.EXERCISES,       data.exercises      ?? []);
+  write(KEYS.SETTINGS,        data.settings       ?? {});
+  write(KEYS.PRS,             data.prs            ?? {});
+  write(KEYS.PROFILE,         data.profile        ?? { weightHistory: [] });
+  write(KEYS.ACHIEVEMENTS,    data.achievements   ?? []);
+  write(KEYS.ROUTINES,        data.routines       ?? []);
+  write(KEYS.PLAN,            data.plan           ?? {});
+  write(KEYS.EXERCISE_NOTES,  data.exerciseNotes  ?? {});
 }
 
 /**
