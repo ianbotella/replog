@@ -88,7 +88,8 @@ function _buildRoutinesHTML() {
     const group      = MUSCLE_GROUPS.find(g => g.id === t.muscleGroup);
     const badgeClass = group?.badgeClass ?? 'badge-neutral';
     return `
-      <div class="card" style="display:flex;align-items:center;gap:var(--space-3)">
+      <div class="card predefined-routine-card" data-template-id="${t.id}"
+           style="cursor:pointer;display:flex;align-items:center;gap:var(--space-3)">
         <div style="flex:1;min-width:0">
           <div style="font-weight:var(--weight-semibold)">${_esc(t.name)}</div>
           <div style="color:var(--text-secondary);font-size:var(--text-sm);margin-top:2px">${_esc(t.description)}</div>
@@ -97,6 +98,7 @@ function _buildRoutinesHTML() {
             <span class="badge badge-neutral">Predefinida</span>
           </div>
         </div>
+        <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-tertiary);flex-shrink:0"></i>
       </div>`;
   }).join('');
 
@@ -190,6 +192,65 @@ function _bindRoutinesEvents() {
       _render();
     });
   });
+
+  _container.querySelectorAll('.predefined-routine-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const t = ROUTINE_TEMPLATES.find(x => x.id === card.dataset.templateId);
+      if (!t) return;
+      _openPredefinedDetail(t);
+    });
+  });
+}
+
+function _openPredefinedDetail(t) {
+  const group      = MUSCLE_GROUPS.find(g => g.id === t.muscleGroup);
+  const badgeClass = group?.badgeClass ?? 'badge-neutral';
+  const groupName  = group?.name ?? '';
+
+  const exercisesHTML = t.exercises.map(ex => {
+    const typeLabel = ex.type === 'cardio'   ? 'Cardio'
+                    : ex.type === 'mobility' ? 'Movilidad'
+                    : ex.type === 'stretch'  ? 'Estiramiento'
+                    : 'Fuerza';
+    let setsInfo;
+    if (ex.type === 'cardio') {
+      setsInfo = `${ex.durationMin ?? 30} min`;
+    } else if (ex.type === 'stretch') {
+      setsInfo = `${ex.sets}×${ex.durationSec ?? 30}s`;
+    } else if (ex.type === 'mobility') {
+      setsInfo = ex.metric === 'time'
+        ? `${ex.sets}×${ex.durationSec ?? 30}s`
+        : `${ex.sets}×${ex.repsMin ?? 10} reps`;
+    } else {
+      setsInfo = (ex.repsMax && ex.repsMax !== ex.repsMin)
+        ? `${ex.sets}×${ex.repsMin}–${ex.repsMax}`
+        : `${ex.sets}×${ex.repsMin ?? '?'}`;
+    }
+    return `
+      <div class="exercise-item" style="pointer-events:none">
+        <div class="exercise-item-info">
+          <div class="exercise-item-name">${_esc(ex.displayName)}</div>
+          <div class="exercise-item-meta">${typeLabel}</div>
+        </div>
+        <div class="exercise-item-actions">
+          <span class="badge badge-neutral" style="flex-shrink:0">${setsInfo}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  const body = openModal({
+    title: _esc(t.name),
+    body: `
+      <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-4)">
+        <span class="badge ${badgeClass}">${_esc(groupName)}</span>
+        <span class="badge badge-neutral">Predefinida · Solo lectura</span>
+      </div>
+      <p style="color:var(--text-secondary);font-size:var(--text-sm);margin-bottom:var(--space-4)">${_esc(t.description)}</p>
+      <div style="display:flex;flex-direction:column;gap:var(--space-1)">
+        ${exercisesHTML}
+      </div>`,
+  });
+  if (window.lucide) window.lucide.createIcons({ nodes: [body] });
 }
 
 // ── Tab: Plan Semanal ──────────────────────────────────────
