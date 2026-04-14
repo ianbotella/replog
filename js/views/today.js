@@ -17,7 +17,7 @@ import {
   todayISO, formatDateDisplay, currentWeekDays, getThisWeekSessions,
   getSettings, saveSettings, getLastExerciseSession, checkAndUpdatePRs,
   getProfile, calcEstimatedCalories, checkAndUpdateAchievements,
-  getCustomRoutines, getWeeklyPlan, resolveWeightKg,
+  getCustomRoutines, getWeeklyPlan, resolveWeightKg, getExerciseNote,
 } from '../store.js';
 import {
   MUSCLE_GROUPS, GENERAL_GROUP, findExerciseById, getSessionGroupDisplay,
@@ -364,6 +364,10 @@ function _exerciseBlockHTML(ex, idx) {
   const lastData = getLastExerciseSession(ex.exerciseId);
   const lastRef  = lastData ? _formatLastSession(lastData, type, metric) : null;
 
+  // Nota personal del ejercicio (de solo lectura en sesión activa)
+  const exNote     = getExerciseNote(ex.exerciseId);
+  const noteHTML   = exNote ? _exerciseNoteHTML(idx, exNote) : '';
+
   const emptyMsg = `<div style="padding:var(--space-3) var(--space-5);color:var(--text-tertiary);font-size:var(--text-sm)">Sin series todavía</div>`;
   const setsHTML = ex.sets.length === 0
     ? emptyMsg
@@ -404,6 +408,7 @@ function _exerciseBlockHTML(ex, idx) {
           </div>
           ${ex.tip ? `<div class="exercise-tip">${ex.tip}</div>` : ''}
           ${lastRef ? `<div class="exercise-last-ref">${lastRef}</div>` : ''}
+          ${noteHTML}
         </div>
         <div style="display:flex;align-items:center;gap:var(--space-1);flex-shrink:0">
           <button class="icon-btn superset-btn" data-ex="${idx}"
@@ -577,6 +582,30 @@ function _formatLastSession(lastData, type, metric) {
     : `Última: ${setsStr}`;
 }
 
+// ── Nota personal del ejercicio ───────────────────────────
+
+function _exerciseNoteHTML(exIdx, note) {
+  const MAX_LEN  = 80;
+  const isLong   = note.length > MAX_LEN;
+  const display  = isLong ? note.substring(0, MAX_LEN) + '...' : note;
+  const safeNote = note.replace(/"/g, '&quot;');
+
+  return `
+    <div id="exercise-note-${exIdx}"
+         data-full-note="${safeNote}" data-expanded="false"
+         style="display:flex;align-items:flex-start;gap:var(--space-1);
+                margin-top:3px;font-size:var(--text-xs);color:var(--text-secondary);line-height:1.4">
+      <i data-lucide="info" style="width:12px;height:12px;flex-shrink:0;margin-top:1px;color:var(--text-tertiary)"></i>
+      <span class="note-text" style="flex:1">${display}</span>
+      ${isLong ? `
+        <button class="btn btn-ghost note-expand-btn" data-ex="${exIdx}"
+          style="padding:0 0 0 var(--space-1);font-size:var(--text-xs);
+                 color:var(--accent-primary);white-space:nowrap;height:auto;
+                 line-height:inherit;flex-shrink:0">Ver más</button>
+      ` : ''}
+    </div>`;
+}
+
 // ── Feature 2: Supersets — list builder ───────────────────
 
 function _buildExercisesListHTML() {
@@ -705,6 +734,22 @@ function _handleExerciseListClick(e) {
     } else {
       _openSupersetModal(exIdx);
     }
+    return;
+  }
+
+  // Expandir/colapsar nota larga
+  const expandBtn = e.target.closest('.note-expand-btn');
+  if (expandBtn) {
+    const exIdx    = parseInt(expandBtn.dataset.ex, 10);
+    const noteEl   = _container.querySelector(`#exercise-note-${exIdx}`);
+    if (!noteEl) return;
+    const expanded = noteEl.dataset.expanded === 'true';
+    const fullNote = noteEl.dataset.fullNote;
+    noteEl.querySelector('.note-text').textContent = expanded
+      ? fullNote.substring(0, 80) + '...'
+      : fullNote;
+    expandBtn.textContent = expanded ? 'Ver más' : 'Ver menos';
+    noteEl.dataset.expanded = expanded ? 'false' : 'true';
     return;
   }
 

@@ -20,6 +20,7 @@
 - **Supersets / Circuitos**: agrupá ejercicios visualmente; el timer solo dispara al terminar el último del grupo
 - **RPE / RIR opcional por serie**: toggle por ejercicio para registrar esfuerzo percibido o repeticiones en reserva
 - **Referencia de última sesión** inline por ejercicio ("Última: 3 × 10 @ 60 kg") para saber exactamente cuánto levantaste la vez anterior
+- **Notas del ejercicio** — si el ejercicio tiene una nota guardada en la biblioteca, aparece inline debajo del nombre como recordatorio de solo lectura; las notas largas se truncan con botón "Ver más"
 - **Compartir sesión** desde el footer de la sesión activa (ver más abajo)
 - Notas libres y duración automática al finalizar
 
@@ -69,6 +70,7 @@
 - Ejercicios agrupados por categoría muscular con filtros
 - Creá y eliminá ejercicios custom persistidos en localStorage
 - Soporte para tipos: Fuerza, Cardio, Movilidad, Estiramiento
+- Cualquier ejercicio (custom o externo) puede tener una **nota personal** con cues técnicos, recordatorios o configuración de máquina (máx. 300 caracteres); el ícono se colorea cuando hay nota guardada
 
 ### Perfil y métricas personales
 
@@ -343,6 +345,7 @@ replog/
 | `replog_achievements` | Logros desbloqueados con fecha |
 | `replog_routines` | Rutinas personalizadas creadas por el usuario (nombre, grupo muscular, ejercicios con series sugeridas) |
 | `replog_plan` | Plan semanal: un routine id (predefinida o custom) o null por cada día (monday → sunday) |
+| `replog_exercise_notes` | Notas personales para ejercicios externos, indexadas por ID del ejercicio (los custom guardan la nota en el campo `notes` dentro de `replog_exercises`) |
 
 ### Modelo de un Set
 
@@ -378,7 +381,7 @@ Los colores de grupos musculares son consistentes en toda la app:
 1. Pusheá la rama `main` al repositorio
 2. Ir a **Settings → Pages → Branch: main / (root)**
 3. La app queda disponible en `https://<usuario>.github.io/replog`
-4. **Incrementar `CACHE_NAME` en `sw.js`** en cada deploy (`replog-v9` → `replog-v10` → ...) para invalidar la caché vieja y activar la actualización automática en todos los dispositivos
+4. **Incrementar `CACHE_NAME` en `sw.js`** en cada deploy (`replog-v10` → `replog-v11` → ...) para invalidar la caché vieja y activar la actualización automática en todos los dispositivos
 
 No requiere CI, build step ni variables de entorno.
 
