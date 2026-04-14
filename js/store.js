@@ -307,18 +307,19 @@ export function deleteExerciseNote(exerciseId, isCustom = false) {
 }
 
 /**
- * Devuelve los datos de la última sesión anterior a hoy donde se registró
- * el ejercicio con ese ID. Busca el más reciente, ignorando la sesión de hoy.
+ * Devuelve los datos de la última sesión finalizada donde se registró
+ * el ejercicio con ese ID. Busca el más reciente, ignorando la sesión activa.
  * @returns {{ date: string, sets: object[] } | null}
  */
 export function getLastExerciseSession(exerciseId) {
-  const today    = todayISO();
   const sessions = getSessions()
-    .filter(s => s.date < today)
+    .filter(s => s.status !== 'active')
     .sort((a, b) => b.date.localeCompare(a.date));
 
   for (const session of sessions) {
-    const ex = session.exercises.find(e => e.exerciseId === exerciseId);
+    const ex = session.exercises.find(
+      e => e.exerciseId === exerciseId || e.id === exerciseId,
+    );
     if (ex && ex.sets && ex.sets.length > 0) {
       return { date: session.date, sets: ex.sets };
     }
