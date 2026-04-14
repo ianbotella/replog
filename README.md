@@ -16,8 +16,8 @@
 - Creá tus propios ejercicios custom con grupo muscular, categoría y tipo
 - Registrá series con peso y repeticiones por ejercicio
 - **Unidad de peso por ejercicio** — chips kg / lb / PC (Peso Corporal) en cada bloque de ejercicio; los valores se convierten automáticamente al cambiar de unidad; el volumen siempre se calcula en kg internamente
-- **Temporizador de descanso** entre series (60 / 90 / 120 s) con cuenta regresiva flotante, vibración y beep de audio al llegar a cero
-- **Supersets / Circuitos**: agrupá ejercicios visualmente; el timer solo dispara al terminar el último del grupo
+- **Temporizador de descanso** — botón flotante para iniciar el descanso manualmente al terminar una serie; mantené presionado para configurar la duración (30s / 60s / 90s / 120s / personalizado); overlay con cuenta regresiva, pausa, vibración y beep al finalizar
+- **Supersets / Circuitos**: agrupá ejercicios visualmente para registro combinado
 - **RPE / RIR opcional por serie**: toggle por ejercicio para registrar esfuerzo percibido o repeticiones en reserva
 - **Referencia de última sesión** inline por ejercicio ("Última: 3 × 10 @ 60 kg") para saber exactamente cuánto levantaste la vez anterior
 - **Notas del ejercicio** — si el ejercicio tiene una nota guardada en la biblioteca, aparece inline debajo del nombre como recordatorio de solo lectura; las notas largas se truncan con botón "Ver más"
@@ -407,7 +407,7 @@ No es necesario limpiar la caché del navegador ni hacer hard refresh manualment
 
 ## Capturas
 
-> *La app cuenta con tema oscuro y claro, bottom navigation con 6 tabs, tarjetas de sesión expandibles, gráficos de línea y barras, overlay de temporizador de descanso, lista de récords personales, vista de planificación con editor de rutinas y plan semanal, y pantalla de configuración con backup.*
+> *La app cuenta con tema oscuro y claro, bottom navigation con 6 tabs, tarjetas de sesión expandibles, gráficos de línea y barras, botón flotante de temporizador de descanso con picker de duración, lista de récords personales, vista de planificación con editor de rutinas y plan semanal, y pantalla de configuración con backup.*
 
 ---
 

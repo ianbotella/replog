@@ -340,6 +340,7 @@ function _renderActiveSession() {
 
   _bindActiveSessionEvents();
   _startTimer();
+  _renderRestFab();
   _loadExtForSession();
 }
 
@@ -842,6 +843,7 @@ function _finishSession() {
 
   // Limpiar COMPLETAMENTE el estado de la sesión activa
   _stopRestTimer();
+  _destroyRestFab();
   if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
   _session    = null;
   _rpeState   = {};
@@ -882,11 +884,12 @@ function _cancelSession() {
   if (!confirm('¿Cancelar la sesión de hoy? Se perderán los datos.')) return;
   import('../store.js').then(({ deleteSession }) => {
     deleteSession(_session.id);
+    _stopRestTimer();
+    _destroyRestFab();
+    if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
     _session    = null;
     _rpeState   = {};
     _unitState  = {};
-    if (_timerInterval) clearInterval(_timerInterval);
-    _stopRestTimer();
     _render();
   });
 }
@@ -1101,11 +1104,7 @@ function _addSet(exIdx) {
   ex.sets.push(newSet);
   saveSession(_session);
   _reRenderExercisesList();
-
-  // Feature 1: disparar timer de descanso (respeta regla de superserie)
-  if (_shouldFireRestTimer(exIdx)) {
-    _startRestTimer(_getRestDuration());
-  }
+  _updateRestFab();
 }
 
 function _deleteSet(exIdx, setIdx) {
@@ -1131,18 +1130,6 @@ function _updateSessionBadge() {
 }
 
 // ── Feature 2: Supersets ───────────────────────────────────
-
-/** El timer solo dispara en el último ejercicio del grupo (por posición en array). */
-function _shouldFireRestTimer(exIdx) {
-  const ex = _session.exercises[exIdx];
-  if (!ex.supersetId) return true;
-
-  const groupIdxs = _session.exercises
-    .map((e, i) => e.supersetId === ex.supersetId ? i : -1)
-    .filter(i => i >= 0);
-
-  return exIdx === Math.max(...groupIdxs);
-}
 
 function _openSupersetModal(exIdx) {
   const ex     = _session.exercises[exIdx];
@@ -1224,6 +1211,7 @@ function _startRestTimer(duration) {
   _restTimer = { active: true, remaining: duration, total: duration, paused: false, intervalId: null };
   _showRestTimerOverlay();
   _updateRestTimerDisplay();
+  _updateRestFab();
   _restTimer.intervalId = setInterval(() => {
     if (_restTimer.paused) return;
     _restTimer.remaining--;
@@ -1232,6 +1220,7 @@ function _startRestTimer(duration) {
       _onRestTimerEnd();
     } else {
       _updateRestTimerDisplay();
+      _updateRestFab();
     }
   }, 1000);
 }
@@ -1240,6 +1229,7 @@ function _stopRestTimer() {
   if (_restTimer.intervalId) clearInterval(_restTimer.intervalId);
   _restTimer = { active: false, remaining: 0, total: 0, paused: false, intervalId: null };
   _hideRestTimerOverlay();
+  _updateRestFab();
 }
 
 function _onRestTimerEnd() {
@@ -1278,7 +1268,7 @@ function _showRestTimerOverlay() {
         <i data-lucide="timer" style="width:15px;height:15px;color:var(--accent-primary)"></i>
         <span class="rest-timer-label">Descanso</span>
         <div class="rest-timer-duration-chips">
-          ${[60, 90, 120].map(s => `
+          ${[30, 60, 90, 120].map(s => `
             <button class="chip${s === duration ? ' active' : ''} rest-duration-chip"
                     data-sec="${s}" style="padding:2px 8px;font-size:10px">${s}s</button>
           `).join('')}
@@ -1311,6 +1301,134 @@ function _showRestTimerOverlay() {
 function _hideRestTimerOverlay() {
   const overlay = document.getElementById('rest-timer-overlay');
   if (overlay) overlay.classList.remove('active');
+}
+
+// ── Rest Timer FAB ─────────────────────────────────────────
+
+let _longPressTimer = null;
+
+function _renderRestFab() {
+  _destroyRestFab();
+  const fab = document.createElement('button');
+  fab.id = 'rest-fab';
+  fab.className = 'rest-fab';
+  fab.setAttribute('aria-label', 'Timer de descanso');
+  (document.getElementById('app') || document.body).appendChild(fab);
+  _updateRestFab();
+  _bindRestFab(fab);
+}
+
+function _destroyRestFab() {
+  const existing = document.getElementById('rest-fab');
+  if (existing) existing.remove();
+  if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+}
+
+function _updateRestFab() {
+  const fab = document.getElementById('rest-fab');
+  if (!fab) return;
+  if (_restTimer.active) {
+    const m = Math.floor(_restTimer.remaining / 60);
+    const s = _restTimer.remaining % 60;
+    const display = m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+    fab.innerHTML = `
+      <i data-lucide="timer-off" style="width:18px;height:18px"></i>
+      <span>${display}</span>
+    `;
+    fab.classList.add('rest-fab--running');
+  } else {
+    const dur = _getRestDuration();
+    fab.innerHTML = `
+      <i data-lucide="timer" style="width:18px;height:18px"></i>
+      <span>${dur}s</span>
+    `;
+    fab.classList.remove('rest-fab--running');
+  }
+  if (window.lucide) window.lucide.createIcons({ nodes: [fab] });
+}
+
+function _bindRestFab(fab) {
+  fab.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    _longPressTimer = setTimeout(() => {
+      _longPressTimer = null;
+      if (!_restTimer.active) _openDurationPickerModal();
+    }, 600);
+  });
+
+  fab.addEventListener('pointerup', () => {
+    if (_longPressTimer) {
+      clearTimeout(_longPressTimer);
+      _longPressTimer = null;
+      if (_restTimer.active) {
+        _stopRestTimer();
+      } else {
+        _startRestTimer(_getRestDuration());
+      }
+    }
+  });
+
+  fab.addEventListener('pointercancel', () => {
+    if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+  });
+
+  fab.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function _openDurationPickerModal() {
+  const current = _getRestDuration();
+  const presets = [30, 60, 90, 120];
+  const isCustom = !presets.includes(current);
+
+  const body = openModal({
+    title: 'Duración del descanso',
+    body: `
+      <div style="display:flex;flex-direction:column;gap:var(--space-4)">
+        <div style="display:flex;gap:var(--space-2)">
+          ${presets.map(s => `
+            <button class="chip${s === current && !isCustom ? ' active' : ''} dur-preset-chip"
+                    data-sec="${s}"
+                    style="flex:1;padding:var(--space-3) 0;font-size:var(--text-sm)">
+              ${s}s
+            </button>
+          `).join('')}
+        </div>
+        <div>
+          <label class="label" for="custom-dur-input">Personalizado (10–600 s)</label>
+          <input id="custom-dur-input" class="input-field" type="number"
+                 min="10" max="600" step="5"
+                 value="${isCustom ? current : ''}"
+                 placeholder="Ej: 150">
+        </div>
+        <button id="save-dur-btn" class="btn btn-primary">Guardar y comenzar</button>
+      </div>
+    `,
+  });
+
+  body.querySelectorAll('.dur-preset-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      body.querySelectorAll('.dur-preset-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const inp = body.querySelector('#custom-dur-input');
+      if (inp) inp.value = '';
+    });
+  });
+
+  body.querySelector('#save-dur-btn').addEventListener('click', () => {
+    const activeChip  = body.querySelector('.dur-preset-chip.active');
+    const customInput = body.querySelector('#custom-dur-input');
+    let sec;
+    if (customInput?.value) {
+      sec = Math.min(600, Math.max(10, parseInt(customInput.value, 10) || 90));
+    } else if (activeChip) {
+      sec = parseInt(activeChip.dataset.sec, 10);
+    } else {
+      sec = 90;
+    }
+    _saveRestDuration(sec);
+    closeModal();
+    _startRestTimer(sec);
+  });
 }
 
 function _updateRestTimerDisplay() {

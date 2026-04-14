@@ -724,6 +724,38 @@
   flex-shrink: 0;
 }
 
+/* ── Rest Timer FAB ──────────────────────────────────────── */
+.rest-fab {
+  position: fixed;
+  bottom: 84px;
+  right: var(--space-5);
+  z-index: 140;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition: background 180ms ease, transform 80ms ease;
+}
+
+.rest-fab:active {
+  transform: scale(0.94);
+}
+
+.rest-fab--running {
+  background: var(--danger, #e53e3e);
+}
+
 /* Inline add exercise row (in active session) */
 .add-exercise-row {
   display: flex;
