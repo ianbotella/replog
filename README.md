@@ -85,6 +85,10 @@ Completá tu perfil en **Config. → Perfil** para habilitar métricas avanzadas
 
 Replog desbloquea logros automáticamente al finalizar sesiones. Cada nuevo logro dispara un toast de celebración. Visualizalos en **Progreso → Logros**.
 
+- Los logros de **Récords personales** solo cuentan cuando superás un registro que ya existía — registrar un ejercicio por primera vez no cuenta como mejora
+- Los logros de **Volumen por sesión** se evalúan contra el volumen de la sesión recién finalizada, no el acumulado histórico
+- Al actualizar la app, los logros obsoletos se eliminan silenciosamente; los logros con el mismo id conservan su fecha de desbloqueo
+
 ### Planificación — Rutinas personalizadas y plan semanal
 
 #### Mis Rutinas
@@ -163,36 +167,46 @@ Todo el cálculo de volumen, PRs y gráficos usa `weightKg` internamente. Los se
 
 ## Logros
 
-Los logros se evalúan automáticamente al finalizar cada sesión. Nunca se repiten.
+Los logros se evalúan automáticamente al finalizar cada sesión. Nunca se repiten. En total son **19 logros en 4 categorías**.
 
 ### Consistencia
 | Logro | Condición |
 |---|---|
-| Primera sesión ✅ | Completar la primera sesión |
-| Comprometido 🎯 | 10 sesiones completadas |
+| Primer paso ✅ | 1 sesión completada |
+| Tomando ritmo 🎯 | 5 sesiones completadas |
+| Comprometido 💪 | 25 sesiones completadas |
 | Veterano 🥋 | 50 sesiones completadas |
 | Centenario 🎖️ | 100 sesiones completadas |
 
 ### Rachas
 | Logro | Condición |
 |---|---|
-| En racha 🔥 | 3 días consecutivos con sesión |
-| Semana perfecta ⚡ | 7 días consecutivos |
+| En racha 🔥 | 3 días consecutivos |
+| Imparable ⚡ | 5 días consecutivos |
+| Semana perfecta 🗓️ | 7 días consecutivos |
+| Dos semanas 💥 | 14 días consecutivos |
 | Mes de hierro 🏅 | 30 días consecutivos |
 
 ### Récords personales
-| Logro | Condición |
-|---|---|
-| Primer récord 🏆 | Primer PR registrado |
-| Máquina de PRs 💥 | 10 PRs distintos |
-| Leyenda del gym 👑 | 25 PRs distintos |
+Solo cuentan mejoras sobre un registro previo, no el primer registro de un ejercicio.
 
-### Volumen acumulado
 | Logro | Condición |
 |---|---|
-| Primera tonelada 💪 | 1.000 kg acumulados |
-| 10.000 kg 🚀 | 10.000 kg acumulados |
-| 100.000 kg 🌋 | 100.000 kg acumulados |
+| Primera mejora 🏆 | Superaste un PR por primera vez |
+| Progresando 📈 | PRs superados en 5 ejercicios distintos |
+| Máquina 💥 | PRs superados en 10 ejercicios distintos |
+| Leyenda 👑 | PRs superados en 25 ejercicios distintos |
+| Al doble 🚀 | Duplicaste tu primer registro en algún ejercicio |
+
+### Volumen por sesión
+Evaluados contra el volumen de la sesión recién finalizada (no el acumulado histórico).
+
+| Logro | Condición |
+|---|---|
+| Primera tonelada 💪 | 1.000 kg en una sola sesión |
+| Bestia 🦁 | 3.000 kg en una sola sesión |
+| Monstruo 🌋 | 5.000 kg en una sola sesión |
+| Élite 👹 | 10.000 kg en una sola sesión |
 
 ---
 
@@ -364,7 +378,7 @@ Los colores de grupos musculares son consistentes en toda la app:
 1. Pusheá la rama `main` al repositorio
 2. Ir a **Settings → Pages → Branch: main / (root)**
 3. La app queda disponible en `https://<usuario>.github.io/replog`
-4. **Incrementar `CACHE_NAME` en `sw.js`** en cada deploy (`replog-v8` → `replog-v9` → ...) para invalidar la caché vieja y activar la actualización automática en todos los dispositivos
+4. **Incrementar `CACHE_NAME` en `sw.js`** en cada deploy (`replog-v9` → `replog-v10` → ...) para invalidar la caché vieja y activar la actualización automática en todos los dispositivos
 
 No requiere CI, build step ni variables de entorno.
 

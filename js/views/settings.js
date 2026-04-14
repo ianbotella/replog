@@ -251,7 +251,8 @@ function _profileSectionHTML() {
 }
 
 function _metricsHTML(heightCm, weightKg, birthYear) {
-  const parts = [];
+  const parts  = [];
+  let hasBMI   = false;
 
   if (heightCm && weightKg) {
     const hm  = heightCm / 100;
@@ -260,6 +261,7 @@ function _metricsHTML(heightCm, weightKg, birthYear) {
               : bmi < 25   ? 'Normal'
               : bmi < 30   ? 'Sobrepeso'
               :               'Obesidad';
+    hasBMI = true;
     parts.push(`<div class="profile-metric"><span class="profile-metric-value">${bmi}</span><span class="profile-metric-label">IMC · ${cat}</span></div>`);
   }
 
@@ -270,9 +272,15 @@ function _metricsHTML(heightCm, weightKg, birthYear) {
     }
   }
 
-  return parts.length
-    ? `<div class="profile-metrics-row">${parts.join('')}</div>`
+  if (!parts.length) return '';
+
+  const disclaimer = hasBMI
+    ? `<p style="font-size:var(--text-xs);color:var(--text-tertiary);margin:var(--space-2) 0 0;line-height:1.4">
+        ⚠️ El IMC no distingue músculo de grasa. Si entrenás con regularidad, puede clasificarte incorrectamente. Usalo como referencia general, no como diagnóstico.
+      </p>`
     : '';
+
+  return `<div class="profile-metrics-row">${parts.join('')}</div>${disclaimer}`;
 }
 
 function _updateMetricsDisplay() {

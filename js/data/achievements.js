@@ -4,34 +4,47 @@
  * Cada logro tiene:
  *   id          string  — identificador único (guardado en localStorage)
  *   name        string  — nombre con emoji mostrado en UI
- *   category    string  — 'streak' | 'prs' | 'volume' | 'sessions'
+ *   category    string  — 'sessions' | 'streak' | 'prs' | 'session_volume'
  *   description string  — frase corta cuando está desbloqueado
  *   hint        string  — condición a cumplir cuando está bloqueado
  *   check(ctx)  fn      — true si se cumple la condición
- *   progress(ctx) fn    — { current, target } para barra de progreso numérica
+ *   progress(ctx) fn    — { current, target } para barra de progreso, o null
  *
- * ctx = { sessionCount, prCount, totalVolume, currentStreak, maxStreak }
+ * ctx = {
+ *   sessionCount, currentStreak, maxStreak, bestStreak,
+ *   totalImproved, exercisesImproved, prDoubleUnlocked,
+ *   sessionVolume
+ * }
  */
 
 export const ACHIEVEMENT_DEFS = [
-  // ── Consistencia ─────────────────────────────────────────────
+  // ── Consistencia (sessionCount) ──────────────────────────
   {
-    id:          'first_session',
-    name:        'Primera sesión ✅',
+    id:          'sessions_1',
+    name:        'Primer paso ✅',
     category:    'sessions',
-    description: 'Registraste tu primera sesión',
+    description: 'Completaste tu primera sesión',
     hint:        'Completá tu primera sesión',
     check:       ctx => ctx.sessionCount >= 1,
     progress:    ctx => ({ current: Math.min(ctx.sessionCount, 1), target: 1 }),
   },
   {
-    id:          'sessions_10',
-    name:        'Comprometido 🎯',
+    id:          'sessions_5',
+    name:        'Tomando ritmo 🎯',
     category:    'sessions',
-    description: '10 sesiones completadas',
-    hint:        'Completá 10 sesiones',
-    check:       ctx => ctx.sessionCount >= 10,
-    progress:    ctx => ({ current: ctx.sessionCount, target: 10 }),
+    description: '5 sesiones completadas',
+    hint:        'Completá 5 sesiones',
+    check:       ctx => ctx.sessionCount >= 5,
+    progress:    ctx => ({ current: ctx.sessionCount, target: 5 }),
+  },
+  {
+    id:          'sessions_25',
+    name:        'Comprometido 💪',
+    category:    'sessions',
+    description: '25 sesiones completadas',
+    hint:        'Completá 25 sesiones',
+    check:       ctx => ctx.sessionCount >= 25,
+    progress:    ctx => ({ current: ctx.sessionCount, target: 25 }),
   },
   {
     id:          'sessions_50',
@@ -52,97 +65,142 @@ export const ACHIEVEMENT_DEFS = [
     progress:    ctx => ({ current: ctx.sessionCount, target: 100 }),
   },
 
-  // ── Rachas ───────────────────────────────────────────────────
+  // ── Rachas (bestStreak) ───────────────────────────────────
   {
     id:          'streak_3',
     name:        'En racha 🔥',
     category:    'streak',
-    description: '3 días consecutivos con sesión',
+    description: '3 días consecutivos entrenando',
     hint:        'Completá 3 días seguidos',
-    check:       ctx => ctx.currentStreak >= 3 || ctx.maxStreak >= 3,
-    progress:    ctx => ({ current: Math.min(Math.max(ctx.currentStreak, ctx.maxStreak), 3), target: 3 }),
+    check:       ctx => ctx.bestStreak >= 3,
+    progress:    ctx => ({ current: Math.min(ctx.bestStreak, 3), target: 3 }),
+  },
+  {
+    id:          'streak_5',
+    name:        'Imparable ⚡',
+    category:    'streak',
+    description: '5 días consecutivos entrenando',
+    hint:        'Completá 5 días seguidos',
+    check:       ctx => ctx.bestStreak >= 5,
+    progress:    ctx => ({ current: Math.min(ctx.bestStreak, 5), target: 5 }),
   },
   {
     id:          'streak_7',
-    name:        'Semana perfecta ⚡',
+    name:        'Semana perfecta 🗓️',
     category:    'streak',
-    description: '7 días consecutivos',
+    description: '7 días consecutivos entrenando',
     hint:        'Completá 7 días seguidos',
-    check:       ctx => ctx.currentStreak >= 7 || ctx.maxStreak >= 7,
-    progress:    ctx => ({ current: Math.min(Math.max(ctx.currentStreak, ctx.maxStreak), 7), target: 7 }),
+    check:       ctx => ctx.bestStreak >= 7,
+    progress:    ctx => ({ current: Math.min(ctx.bestStreak, 7), target: 7 }),
+  },
+  {
+    id:          'streak_14',
+    name:        'Dos semanas 💥',
+    category:    'streak',
+    description: '14 días consecutivos entrenando',
+    hint:        'Completá 14 días seguidos',
+    check:       ctx => ctx.bestStreak >= 14,
+    progress:    ctx => ({ current: Math.min(ctx.bestStreak, 14), target: 14 }),
   },
   {
     id:          'streak_30',
     name:        'Mes de hierro 🏅',
     category:    'streak',
-    description: '30 días consecutivos',
+    description: '30 días consecutivos entrenando',
     hint:        'Completá 30 días seguidos',
-    check:       ctx => ctx.currentStreak >= 30 || ctx.maxStreak >= 30,
-    progress:    ctx => ({ current: Math.min(Math.max(ctx.currentStreak, ctx.maxStreak), 30), target: 30 }),
+    check:       ctx => ctx.bestStreak >= 30,
+    progress:    ctx => ({ current: Math.min(ctx.bestStreak, 30), target: 30 }),
   },
 
-  // ── Récords personales ────────────────────────────────────────
+  // ── Récords personales (solo mejoras sobre el PR anterior) ─
   {
-    id:          'first_pr',
-    name:        'Primer récord 🏆',
+    id:          'pr_improved_1',
+    name:        'Primera mejora 🏆',
     category:    'prs',
-    description: 'Primer PR registrado',
-    hint:        'Registrá tu primer récord en un ejercicio de fuerza',
-    check:       ctx => ctx.prCount >= 1,
-    progress:    ctx => ({ current: Math.min(ctx.prCount, 1), target: 1 }),
+    description: 'Superaste un PR por primera vez',
+    hint:        'Superá un registro previo en cualquier ejercicio',
+    check:       ctx => ctx.totalImproved >= 1,
+    progress:    ctx => ({ current: Math.min(ctx.totalImproved, 1), target: 1 }),
   },
   {
-    id:          'pr_10',
-    name:        'Máquina de PRs 💥',
+    id:          'pr_improved_5',
+    name:        'Progresando 📈',
     category:    'prs',
-    description: '10 PRs distintos registrados',
-    hint:        'Registrá 10 PRs en ejercicios diferentes',
-    check:       ctx => ctx.prCount >= 10,
-    progress:    ctx => ({ current: ctx.prCount, target: 10 }),
+    description: 'Superaste PRs en 5 ejercicios distintos',
+    hint:        'Superá tu récord en 5 ejercicios distintos',
+    check:       ctx => ctx.exercisesImproved >= 5,
+    progress:    ctx => ({ current: ctx.exercisesImproved, target: 5 }),
   },
   {
-    id:          'pr_25',
-    name:        'Leyenda del gym 👑',
+    id:          'pr_improved_10',
+    name:        'Máquina 💥',
     category:    'prs',
-    description: '25 PRs distintos registrados',
-    hint:        'Registrá 25 PRs en ejercicios diferentes',
-    check:       ctx => ctx.prCount >= 25,
-    progress:    ctx => ({ current: ctx.prCount, target: 25 }),
+    description: 'Superaste PRs en 10 ejercicios distintos',
+    hint:        'Superá tu récord en 10 ejercicios distintos',
+    check:       ctx => ctx.exercisesImproved >= 10,
+    progress:    ctx => ({ current: ctx.exercisesImproved, target: 10 }),
+  },
+  {
+    id:          'pr_improved_25',
+    name:        'Leyenda 👑',
+    category:    'prs',
+    description: 'Superaste PRs en 25 ejercicios distintos',
+    hint:        'Superá tu récord en 25 ejercicios distintos',
+    check:       ctx => ctx.exercisesImproved >= 25,
+    progress:    ctx => ({ current: ctx.exercisesImproved, target: 25 }),
+  },
+  {
+    id:          'pr_double',
+    name:        'Al doble 🚀',
+    category:    'prs',
+    description: 'Duplicaste tu primer registro en algún ejercicio',
+    hint:        'Llegá al doble de tu primer peso en cualquier ejercicio',
+    check:       ctx => ctx.prDoubleUnlocked,
+    progress:    null,
   },
 
-  // ── Volumen acumulado ─────────────────────────────────────────
+  // ── Volumen por sesión ────────────────────────────────────
   {
-    id:          'volume_1k',
+    id:          'session_vol_1k',
     name:        'Primera tonelada 💪',
-    category:    'volume',
-    description: '1.000 kg acumulados en total',
-    hint:        'Acumulá 1.000 kg de volumen en total',
-    check:       ctx => ctx.totalVolume >= 1000,
-    progress:    ctx => ({ current: ctx.totalVolume, target: 1000 }),
+    category:    'session_volume',
+    description: '1.000 kg en una sola sesión',
+    hint:        'Acumulá 1.000 kg de volumen en una sesión',
+    check:       ctx => ctx.sessionVolume >= 1000,
+    progress:    null,
   },
   {
-    id:          'volume_10k',
-    name:        '10.000 kg 🚀',
-    category:    'volume',
-    description: '10.000 kg acumulados en total',
-    hint:        'Acumulá 10.000 kg de volumen en total',
-    check:       ctx => ctx.totalVolume >= 10000,
-    progress:    ctx => ({ current: ctx.totalVolume, target: 10000 }),
+    id:          'session_vol_3k',
+    name:        'Bestia 🦁',
+    category:    'session_volume',
+    description: '3.000 kg en una sola sesión',
+    hint:        'Acumulá 3.000 kg de volumen en una sesión',
+    check:       ctx => ctx.sessionVolume >= 3000,
+    progress:    null,
   },
   {
-    id:          'volume_100k',
-    name:        '100.000 kg 🌋',
-    category:    'volume',
-    description: '100.000 kg acumulados en total',
-    hint:        'Acumulá 100.000 kg de volumen en total',
-    check:       ctx => ctx.totalVolume >= 100000,
-    progress:    ctx => ({ current: ctx.totalVolume, target: 100000 }),
+    id:          'session_vol_5k',
+    name:        'Monstruo 🌋',
+    category:    'session_volume',
+    description: '5.000 kg en una sola sesión',
+    hint:        'Acumulá 5.000 kg de volumen en una sesión',
+    check:       ctx => ctx.sessionVolume >= 5000,
+    progress:    null,
+  },
+  {
+    id:          'session_vol_10k',
+    name:        'Élite 👹',
+    category:    'session_volume',
+    description: '10.000 kg en una sola sesión',
+    hint:        'Acumulá 10.000 kg de volumen en una sesión',
+    check:       ctx => ctx.sessionVolume >= 10000,
+    progress:    null,
   },
 ];
 
 export const ACHIEVEMENT_CATEGORY_LABELS = {
-  sessions: 'Consistencia',
-  streak:   'Rachas',
-  prs:      'Récords personales',
-  volume:   'Volumen acumulado',
+  sessions:       'Consistencia',
+  streak:         'Rachas',
+  prs:            'Récords personales',
+  session_volume: 'Volumen por sesión',
 };
