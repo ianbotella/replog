@@ -245,7 +245,7 @@ function _routineTemplateCardHTML(t, isSuggested = false) {
 
 async function _startFromTemplate(template) {
   const external = await fetchExternalExercises();
-  _session    = createSession();
+  _session    = createSession(template.muscleGroup ?? null);
   _rpeState   = {};
   _unitState  = {};
 
@@ -286,8 +286,7 @@ async function _startFromTemplate(template) {
 // ── Sesión activa ──────────────────────────────────────────
 
 function _renderActiveSession() {
-  const custom    = getCustomExercises();
-  const groupInfo = getSessionGroupDisplay(_session, custom);
+  const groupInfo = _sessionBadgeInfo();
   const weekDays  = currentWeekDays();
   const completedDates = new Set(getThisWeekSessions().map(s => s.date));
 
@@ -1121,10 +1120,18 @@ function _reRenderExercisesList() {
   _updateSessionBadge();
 }
 
+function _sessionBadgeInfo() {
+  if (_session.muscleGroup) {
+    const g = MUSCLE_GROUPS.find(m => m.id === _session.muscleGroup);
+    if (g) return { name: g.name, badgeClass: g.badgeClass };
+  }
+  return getSessionGroupDisplay(_session, getCustomExercises());
+}
+
 function _updateSessionBadge() {
   const badge = document.getElementById('session-group-badge');
   if (!badge) return;
-  const { name, badgeClass } = getSessionGroupDisplay(_session, getCustomExercises());
+  const { name, badgeClass } = _sessionBadgeInfo();
   badge.textContent = name;
   badge.className   = `badge ${badgeClass}`;
 }
